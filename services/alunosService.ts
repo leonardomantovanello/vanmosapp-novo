@@ -6,13 +6,11 @@ export interface Passenger {
   name: string;
 }
 
-// GET /api/alunos. For a RESPONSAVEL (passenger/guardian) token the backend
-// now filters server-side to that guardian's own kids (responsavel_id FK +
-// ownership check, added on the backend). For a MOTORISTA token it
-// currently still returns EVERY student system-wide — Aluno has no
-// motorista_id/van_id FK yet to scope by route (documented as a known gap
-// in AlunoController's javadoc on the backend). No client-side filtering is
-// needed or possible here either way.
+// GET /api/alunos. The backend filters server-side by role: a RESPONSAVEL
+// (passenger/guardian) token only gets their own kids (responsavel_id FK +
+// ownership check), and a MOTORISTA token only gets students they
+// registered (motorista_id FK + ownership check) — no client-side
+// filtering needed or possible here either way.
 export async function listAlunos(): Promise<Passenger[]> {
   const alunos = await authorizedRequest<AlunoDTO[]>('/alunos');
   return alunos.map((aluno) => ({ id: String(aluno.id), name: aluno.nome }));

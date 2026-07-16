@@ -45,9 +45,9 @@ export interface MotoristaAdminDTO {
   ativo: boolean;
 }
 
-// Mirrors model/entity/Aluno.java. GET /api/alunos is filtered server-side
-// to the caller's own kids when the JWT role is RESPONSAVEL; MOTORISTA/ADMIN
-// currently still see every student (no motorista/van FK on Aluno yet).
+// Mirrors model/entity/Aluno.java. GET /api/alunos is filtered server-side:
+// RESPONSAVEL gets only their own kids (responsavelId), MOTORISTA gets only
+// students they registered (motoristaId), ADMIN gets everyone.
 export interface AlunoDTO {
   id: number;
   nome: string;
@@ -58,4 +58,30 @@ export interface AlunoDTO {
   turno: string | null;
   ativo: boolean;
   responsavelId: number | null;
+  motoristaId: number | null;
+}
+
+// Mirrors model/entity/Mensagem.java. GET/POST /api/mensagens/aluno/{alunoId}
+// — one conversation per aluno, shared by that aluno's motorista and
+// responsavel (see MensagemController for the ownership check).
+export interface MensagemDTO {
+  id: number;
+  alunoId: number;
+  remetenteTipo: 'MOTORISTA' | 'RESPONSAVEL' | 'ADMIN';
+  remetenteId: number;
+  texto: string;
+  criadoEm: string;
+}
+
+// Mirrors model/entity/Falta.java. GET /api/faltas/aluno/{alunoId} (read —
+// motorista or responsavel of that aluno) / POST+DELETE (write — motorista
+// only, see FaltaController). A day with no Falta record is presumed
+// present; there's no explicit "present" status stored.
+export interface FaltaDTO {
+  id: number;
+  alunoId: number;
+  data: string; // ISO date, "yyyy-MM-dd"
+  justificativa: string | null;
+  registradoPorMotoristaId: number;
+  criadoEm: string;
 }

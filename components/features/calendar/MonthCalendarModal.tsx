@@ -15,7 +15,7 @@ export interface MonthCalendarModalProps {
   absences: number;
   monthDays: ({ day: number; status?: AttendanceStatus } | null)[];
   isPastOrToday: (day: number) => boolean;
-  onToggleDay: (day: number) => void;
+  onDayPress: (day: number) => void;
 }
 
 export function MonthCalendarModal({
@@ -27,7 +27,7 @@ export function MonthCalendarModal({
   absences,
   monthDays,
   isPastOrToday,
-  onToggleDay,
+  onDayPress,
 }: MonthCalendarModalProps) {
   return (
     <ModalSheet visible={visible} onClose={onClose} closeAccessibilityLabel="Fechar calendário">
@@ -61,7 +61,7 @@ export function MonthCalendarModal({
               day={item.day}
               status={item.status}
               enabled={isPastOrToday(item.day)}
-              onPress={() => onToggleDay(item.day)}
+              onPress={() => onDayPress(item.day)}
               size={44}
             />
           ) : (

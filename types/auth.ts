@@ -16,6 +16,11 @@ export interface CadastroLoginResponse {
     id: number;
     nome: string;
     email: string;
+    // Discrimina MOTORISTA vs PASSAGEIRO dentro da mesma tabela/endpoint —
+    // ver Passageiro.tipo no backend. authService.ts usa isto para decidir
+    // a role real, em vez de confiar em qual botão o usuário apertou na
+    // tela de login (que não tem como saber o tipo da conta antes de logar).
+    tipo: 'MOTORISTA' | 'PASSAGEIRO';
   };
 }
 

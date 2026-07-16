@@ -10,9 +10,12 @@ export interface SideMenuProps {
   onClose: () => void;
   onProfilePress: () => void;
   onLogoutPress: () => void;
+  // Opcional: nem toda tela que usa o SideMenu tem uma área de configurações
+  // ainda (só passenger-home por enquanto) — sem isso, o item nem aparece.
+  onSettingsPress?: () => void;
 }
 
-export function SideMenu({ visible, onClose, onProfilePress, onLogoutPress }: SideMenuProps) {
+export function SideMenu({ visible, onClose, onProfilePress, onLogoutPress, onSettingsPress }: SideMenuProps) {
   return (
     <ModalSheet visible={visible} onClose={onClose} align="top-right" closeAccessibilityLabel="Fechar menu">
       <Pressable
@@ -23,6 +26,16 @@ export function SideMenu({ visible, onClose, onProfilePress, onLogoutPress }: Si
         <MaterialIcons name="person" size={20} color={theme.colors.white} />
         <Text style={styles.itemText}>{commonStrings.actions.myProfile}</Text>
       </Pressable>
+      {onSettingsPress ? (
+        <Pressable
+          style={styles.item}
+          onPress={onSettingsPress}
+          accessibilityRole="button"
+          accessibilityLabel={commonStrings.actions.settings}>
+          <MaterialIcons name="settings" size={20} color={theme.colors.white} />
+          <Text style={styles.itemText}>{commonStrings.actions.settings}</Text>
+        </Pressable>
+      ) : null}
       <Pressable
         style={styles.item}
         onPress={onLogoutPress}

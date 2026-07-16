@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,7 +12,10 @@ import { Avatar } from '@/components/ui/Avatar';
 import { commonStrings } from '@/constants/strings';
 import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
-import type { AttendanceMap } from '@/types';
+import { listAlunos, type Passenger } from '@/services/alunosService';
+import { listFaltas } from '@/services/faltaService';
+import type { FaltaDTO } from '@/types/api';
+import type { AttendanceStatus } from '@/types';
 
 const MONTH_NAMES = [
   'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
@@ -25,7 +28,45 @@ export default function PassengerHome() {
   const session = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [dayStatus, setDayStatus] = useState<AttendanceMap>({});
+  // Faltas vêm do backend e são só leitura aqui — quem marca/desmarca é o
+  // motorista (ver app/attendance.tsx e FaltaController, que recusa escrita
+  // de qualquer outra role no servidor, não só na UI). Um dia sem falta
+  // registrada é presumido presente.
+  const [faltas, setFaltas] = useState<FaltaDTO[]>([]);
+  // GET /api/alunos is filtered server-side to this responsável's own kids.
+  // Chat/faltas são escopados por aluno, então precisamos de um aluno id
+  // antes de poder abrir o chat ou carregar as faltas. Pega o primeiro
+  // filho se houver mais de um — não existe seletor ainda pra esse caso.
+  const [meuAluno, setMeuAluno] = useState<Passenger | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    listAlunos()
+      .then((alunos) => {
+        if (isMounted) setMeuAluno(alunos[0] ?? null);
+      })
+      .catch(() => {
+        if (isMounted) setMeuAluno(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!meuAluno) return;
+    let isMounted = true;
+    listFaltas(Number(meuAluno.id))
+      .then((data) => {
+        if (isMounted) setFaltas(data);
+      })
+      .catch(() => {
+        if (isMounted) setFaltas([]);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [meuAluno]);
 
   const passengerName = session.user?.name ?? 'Passageiro';
   const today = new Date();
@@ -36,33 +77,37 @@ export default function PassengerHome() {
 
   const isPastOrToday = (day: number) => new Date(year, monthIndex, day) <= todayDateOnly;
 
-  const toggleDayStatus = (day: number) => {
-    setDayStatus((prev) => {
-      const current = prev[day];
-      const next = current === undefined ? 'present' : current === 'present' ? 'absent' : undefined;
-      const nextState = { ...prev };
-      if (next) {
-        nextState[day] = next;
-      } else {
-        delete nextState[day];
-      }
-      return nextState;
-    });
-  };
+  // yyyy-MM-dd do mês/ano atual em exibição, pra casar com FaltaDTO.data.
+  function isoDateFor(day: number): string {
+    const mm = String(monthIndex + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+  }
 
-  const absences = Object.values(dayStatus).filter((status) => status === 'absent').length;
+  const faltaPorDia = new Map(faltas.map((falta) => [falta.data, falta]));
+  const statusFor = (day: number): AttendanceStatus | undefined => (faltaPorDia.has(isoDateFor(day)) ? 'absent' : undefined);
+
+  // Somente leitura: mostra a justificativa que o motorista registrou, sem
+  // permitir marcar/desmarcar (isso é feito só no painel do motorista).
+  function handleDayPress(day: number) {
+    const falta = faltaPorDia.get(isoDateFor(day));
+    if (!falta) return;
+    Alert.alert(`Falta em ${day}/${monthIndex + 1}`, falta.justificativa || 'Sem justificativa registrada.');
+  }
+
+  const absences = faltas.filter((falta) => falta.data.startsWith(`${year}-${String(monthIndex + 1).padStart(2, '0')}`)).length;
   const firstWeekDay = new Date(year, monthIndex, 1).getDay();
   const monthDays = [
     ...Array.from({ length: firstWeekDay }, () => null),
     ...Array.from({ length: new Date(year, monthIndex + 1, 0).getDate() }, (_, index) => {
       const day = index + 1;
-      return { day, status: dayStatus[day] };
+      return { day, status: statusFor(day) };
     }),
   ];
 
   const weekDays = Array.from({ length: 5 }, (_, index) => {
     const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + index);
-    return { day: date.getDate(), status: dayStatus[date.getDate()] };
+    return { day: date.getDate(), status: statusFor(date.getDate()) };
   });
 
   function handleLogout() {
@@ -83,6 +128,10 @@ export default function PassengerHome() {
         onProfilePress={() => {
           setMenuOpen(false);
           router.push('/profile');
+        }}
+        onSettingsPress={() => {
+          setMenuOpen(false);
+          router.push('/settings');
         }}
         onLogoutPress={handleLogout}
       />
@@ -143,7 +192,7 @@ export default function PassengerHome() {
                 day={item.day}
                 status={item.status}
                 enabled={isPastOrToday(item.day)}
-                onPress={() => toggleDayStatus(item.day)}
+                onPress={() => handleDayPress(item.day)}
               />
             ))}
           </View>
@@ -159,7 +208,7 @@ export default function PassengerHome() {
         absences={absences}
         monthDays={monthDays}
         isPastOrToday={isPastOrToday}
-        onToggleDay={toggleDayStatus}
+        onDayPress={handleDayPress}
       />
 
       <View style={styles.bottomNav}>
@@ -174,7 +223,11 @@ export default function PassengerHome() {
         </Pressable>
         <Pressable
           style={styles.navItem}
-          onPress={() => router.push({ pathname: '/chat', params: { contactName: 'Motorista' } })}
+          onPress={() =>
+            meuAluno
+              ? router.push({ pathname: '/chat', params: { contactName: 'Motorista', alunoId: meuAluno.id } })
+              : handleFeatureInDevelopment()
+          }
           accessibilityRole="button"
           accessibilityLabel="Abrir chat com o motorista">
           <MaterialIcons name="chat-bubble-outline" size={26} color={theme.colors.textFaint} />

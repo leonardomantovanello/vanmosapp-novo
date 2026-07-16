@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -10,14 +10,11 @@ import { commonStrings } from '@/constants/strings';
 import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { ApiError, login as loginRequest } from '@/services/authService';
-import type { UserRole } from '@/types';
 import { validateLoginForm } from '@/utils/validation';
 
 export default function Login() {
   const router = useRouter();
   const session = useSession();
-  const { role: roleParam } = useLocalSearchParams<{ role?: string }>();
-  const role: UserRole = roleParam === 'driver' ? 'driver' : 'passenger';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,11 +31,12 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Passenger/guardian goes through POST /api/login (Cadastro); driver
-      // goes through POST /api/motoristas-admin/login (MotoristasAdmin) —
-      // two different endpoints against two different backend tables. See
-      // services/authService.ts for the (inconsistent) response shapes.
-      const result = await loginRequest(email.trim(), password, role);
+      // The role that actually matters comes back from the backend (see
+      // authService.ts) — a given email/CPF belongs to a driver or a
+      // passenger account regardless of which button was pressed here, so
+      // routing/session below use result.role, not the `role` selected on
+      // this screen.
+      const result = await loginRequest(email.trim(), password);
       session.login({
         id: result.id,
         name: result.name,
@@ -49,7 +47,7 @@ export default function Login() {
         placaVan: result.placaVan ?? null,
         modeloVan: result.modeloVan ?? null,
       });
-      router.replace(role === 'driver' ? '/driver-home' : '/passenger-home');
+      router.replace(result.role === 'driver' ? '/driver-home' : '/passenger-home');
     } catch (err) {
       // ApiError.message carries the backend's `mensagem` directly — e.g.
       // "Credenciais inválidas" (401) or "Conta inativa. Entre em contato

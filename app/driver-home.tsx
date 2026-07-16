@@ -139,15 +139,23 @@ export default function DriverHome() {
         keyExtractor={(item) => item.id}
         style={styles.list}
         renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [styles.passengerItem, pressed && styles.actionPressed]}
-            onPress={() => router.push({ pathname: '/chat', params: { contactName: item.name } })}
-            accessibilityRole="button"
-            accessibilityLabel={`Conversar com ${item.name}`}>
-            <Avatar size={48} iconSize={28} />
-            <Text style={styles.passengerName}>{item.name.toUpperCase()}</Text>
-            <MaterialIcons name="arrow-forward-ios" size={18} color={theme.colors.white} />
-          </Pressable>
+          <View style={[styles.passengerItem, styles.passengerRow]}>
+            <Pressable
+              style={styles.passengerMain}
+              onPress={() => router.push({ pathname: '/chat', params: { contactName: item.name, alunoId: item.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Conversar com ${item.name}`}>
+              <Avatar size={48} iconSize={28} />
+              <Text style={styles.passengerName}>{item.name.toUpperCase()}</Text>
+            </Pressable>
+            <Pressable
+              hitSlop={8}
+              onPress={() => router.push({ pathname: '/attendance', params: { contactName: item.name, alunoId: item.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Ver faltas de ${item.name}`}>
+              <MaterialIcons name="event-busy" size={22} color={theme.colors.white} />
+            </Pressable>
+          </View>
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
@@ -270,6 +278,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: theme.spacing.lg,
+    gap: theme.spacing.md + 2,
+  },
+  passengerRow: {
+    justifyContent: 'space-between',
+  },
+  passengerMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
     gap: theme.spacing.md + 2,
   },
   passengerName: {

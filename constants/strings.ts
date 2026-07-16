@@ -9,6 +9,8 @@ export const commonStrings = {
     login: 'Entrar',
     logout: 'Sair',
     myProfile: 'Meu perfil',
+    settings: 'Configurações',
+    changePassword: 'Alterar senha',
     seeAllDays: 'Ver todos os dias',
   },
   feedback: {

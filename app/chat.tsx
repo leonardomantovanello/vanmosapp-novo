@@ -9,24 +9,29 @@ import { Header } from '@/components/ui/Header';
 import { Screen } from '@/components/ui/Screen';
 import { commonStrings } from '@/constants/strings';
 import { theme } from '@/constants/theme';
+import { useSession } from '@/context/SessionContext';
 import { getMessages, sendMessage } from '@/services/messageService';
 import type { ChatMessage } from '@/types';
 
 export default function Chat() {
   const router = useRouter();
-  const { contactName } = useLocalSearchParams<{ contactName?: string }>();
+  const session = useSession();
+  const { contactName, alunoId: alunoIdParam } = useLocalSearchParams<{ contactName?: string; alunoId?: string }>();
   const contact = contactName || 'Contato';
+  const alunoId = Number(alunoIdParam);
+  const currentUserId = session.user?.id ?? 0;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   useEffect(() => {
-    getMessages(contact).then(setMessages);
-  }, [contact]);
+    if (!alunoId) return;
+    getMessages(alunoId, currentUserId).then(setMessages);
+  }, [alunoId, currentUserId]);
 
   async function handleSend() {
-    if (!text.trim()) return;
-    const message = await sendMessage(contact, text.trim());
+    if (!text.trim() || !alunoId) return;
+    const message = await sendMessage(alunoId, currentUserId, text.trim());
     setMessages((prev) => [...prev, message]);
     setText('');
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
