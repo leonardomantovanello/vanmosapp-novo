@@ -1,20 +1,53 @@
-import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native';
 
-type Route = {
-  id: string;
-  nome: string;
-  cep: string;
-  numero: string;
-  referencia: string;
-  parada: string;
-};
+import { RouteTimeline } from '@/components/features/route/RouteTimeline';
+import { Button } from '@/components/ui/Button';
+import { Header } from '@/components/ui/Header';
+import { Screen } from '@/components/ui/Screen';
+import { commonStrings } from '@/constants/strings';
+import { theme } from '@/constants/theme';
+import { lookupCep } from '@/services/cepService';
+import { addRouteStop } from '@/services/routeService';
+import type { RouteStop } from '@/types';
+import { maskCep } from '@/utils/masks';
+import { isRequired, isValidCep } from '@/utils/validation';
+
+function FieldRow({
+  label,
+  value,
+  onChangeText,
+  keyboardType,
+  maxLength,
+  narrow,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  keyboardType?: KeyboardTypeOptions;
+  maxLength?: number;
+  narrow?: boolean;
+}) {
+  return (
+    <View style={styles.fieldRow}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={[styles.input, narrow && styles.inputSmall]}
+        placeholderTextColor={theme.colors.textFaint}
+        keyboardType={keyboardType}
+        maxLength={maxLength}
+        value={value}
+        onChangeText={onChangeText}
+        accessibilityLabel={label}
+      />
+    </View>
+  );
+}
 
 export default function EditRoute() {
   const router = useRouter();
-  const [routes, setRoutes] = useState<Route[]>([]);
+  const [routes, setRoutes] = useState<RouteStop[]>([]);
   const [nome, setNome] = useState('');
   const [cep, setCep] = useState('');
   const [bairro, setBairro] = useState('');
@@ -23,186 +56,145 @@ export default function EditRoute() {
   const [referencia, setReferencia] = useState('');
   const [parada, setParada] = useState('');
   const [loadingCep, setLoadingCep] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function handleCepChange(value: string) {
-    setCep(value);
-    const cleaned = value.replace(/\D/g, '');
-    if (cleaned.length === 8) {
-      setLoadingCep(true);
-      try {
-        const res = await fetch(`https://viacep.com.br/ws/${cleaned}/json/`);
-        const data = await res.json();
-        if (!data.erro) {
-          setNome(data.logradouro || '');
-          setBairro(data.bairro || '');
-          setCidade(data.localidade || '');
-        }
-      } catch {}
-      setLoadingCep(false);
+    const masked = maskCep(value);
+    setCep(masked);
+    setCepError(null);
+
+    if (!isValidCep(masked)) {
+      setBairro('');
+      setCidade('');
+      return;
+    }
+
+    setLoadingCep(true);
+    const result = await lookupCep(masked);
+    setLoadingCep(false);
+
+    switch (result.status) {
+      case 'success':
+        setNome(result.data.logradouro || nome);
+        setBairro(result.data.bairro);
+        setCidade(result.data.localidade);
+        break;
+      case 'not_found':
+        setBairro('');
+        setCidade('');
+        setCepError(commonStrings.cep.notFound);
+        break;
+      case 'invalid':
+        setCepError(commonStrings.cep.invalid);
+        break;
+      case 'timeout':
+        setCepError(commonStrings.cep.timeout);
+        break;
+      case 'network_error':
+        setCepError(commonStrings.cep.networkError);
+        break;
     }
   }
 
-  function handleAdd() {
-    if (!nome.trim()) return;
-    setRoutes((prev) => [...prev, { id: Date.now().toString(), nome, cep, numero, referencia, parada }]);
-    setNome(''); setCep(''); setBairro(''); setCidade(''); setNumero(''); setReferencia(''); setParada('');
+  async function handleAdd() {
+    if (!isRequired(nome)) {
+      setFormError('Informe o nome do ponto de parada.');
+      return;
+    }
+    if (!isValidCep(cep)) {
+      setFormError(commonStrings.validation.invalidCep);
+      return;
+    }
+
+    setFormError(null);
+    const stop = await addRouteStop({ nome, cep, bairro, cidade, numero, referencia, parada });
+    setRoutes((prev) => [...prev, stop]);
+    setNome('');
+    setCep('');
+    setBairro('');
+    setCidade('');
+    setNumero('');
+    setReferencia('');
+    setParada('');
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-        <MaterialIcons name="arrow-back-ios" size={22} color="#aa44ff" />
-      </TouchableOpacity>
+    <Screen keyboardAvoiding scroll contentContainerStyle={styles.container}>
+      <Header onBack={() => router.back()} />
 
-      {/* Rotas adicionadas */}
-      <View style={styles.routeList}>
-        {routes.length === 0 ? (
-          <Text style={styles.emptyText}>Nenhuma rota adicionada</Text>
-        ) : (
-          <FlatList
-            data={routes}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => (
-              <View style={styles.routeItem}>
-                <View style={styles.dotLine}>
-                  <View style={[styles.dot, index === 0 && styles.dotActive]} />
-                  {index < routes.length - 1 && <View style={styles.line} />}
-                </View>
-                <Text style={styles.routeName}>{item.nome}</Text>
-              </View>
-            )}
-          />
-        )}
-        <View style={styles.addDot}>
-          <MaterialIcons name="add" size={20} color="#fff" />
-        </View>
-      </View>
+      <RouteTimeline stops={routes} />
 
       <View style={styles.divider} />
 
-      {/* Formulário */}
       <View style={styles.form}>
-        <View style={styles.fieldRow}>
-          <Text style={styles.label}>Nome</Text>
-          <TextInput style={styles.input} placeholderTextColor="#555" value={nome} onChangeText={setNome} />
-        </View>
+        <FieldRow label="Nome" value={nome} onChangeText={setNome} />
+
         <View style={styles.fieldRow}>
           <Text style={styles.label}>Cep</Text>
           <View style={styles.cepContainer}>
-            <TextInput style={styles.cepInput} placeholderTextColor="#555" keyboardType="numeric" value={cep} onChangeText={handleCepChange} maxLength={9} />
-            {loadingCep && <Text style={styles.hint}>Buscando...</Text>}
-            {bairro ? <Text style={styles.hint}>{bairro} - {cidade}</Text> : null}
+            <TextInput
+              style={styles.cepInput}
+              placeholderTextColor={theme.colors.textFaint}
+              keyboardType="numeric"
+              value={cep}
+              onChangeText={handleCepChange}
+              maxLength={9}
+              accessibilityLabel="CEP"
+            />
+            {loadingCep ? <Text style={styles.hint}>{commonStrings.cep.searching}</Text> : null}
+            {!loadingCep && cepError ? <Text style={styles.errorHint}>{cepError}</Text> : null}
+            {!loadingCep && !cepError && bairro ? <Text style={styles.hint}>{bairro} - {cidade}</Text> : null}
           </View>
         </View>
-        <View style={styles.fieldRow}>
-          <Text style={styles.label}>Nº casa</Text>
-          <TextInput style={[styles.input, styles.inputSmall]} placeholderTextColor="#555" keyboardType="numeric" value={numero} onChangeText={setNumero} />
-        </View>
-        <View style={styles.fieldRow}>
-          <Text style={styles.label}>Ponto de{'\n'}referência</Text>
-          <TextInput style={styles.input} placeholderTextColor="#555" value={referencia} onChangeText={setReferencia} />
-        </View>
-        <View style={styles.fieldRow}>
-          <Text style={styles.label}>Parada</Text>
-          <TextInput style={styles.input} placeholderTextColor="#555" value={parada} onChangeText={setParada} />
-        </View>
 
-        <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-          <Text style={styles.addButtonText}>Adicionar</Text>
-        </TouchableOpacity>
+        <FieldRow label="Nº casa" value={numero} onChangeText={setNumero} keyboardType="numeric" narrow />
+        <FieldRow label={'Ponto de\nreferência'} value={referencia} onChangeText={setReferencia} />
+        <FieldRow label="Parada" value={parada} onChangeText={setParada} />
+
+        {formError ? <Text style={styles.errorHint}>{formError}</Text> : null}
+
+        <Button title="Adicionar" onPress={handleAdd} variant="solid" style={styles.addButton} />
       </View>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
-    paddingTop: 60,
-    paddingHorizontal: 24,
-  },
-  back: {
-    marginBottom: 20,
-  },
-  routeList: {
-    minHeight: 120,
-    justifyContent: 'center',
-  },
-  emptyText: {
-    color: '#555',
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  routeItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 4,
-  },
-  dotLine: {
-    alignItems: 'center',
-  },
-  dot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#aa44ff',
-    backgroundColor: '#0d0d0d',
-  },
-  dotActive: {
-    backgroundColor: '#aa44ff',
-  },
-  line: {
-    width: 2,
-    height: 32,
-    backgroundColor: '#aa44ff',
-  },
-  routeName: {
-    color: '#fff',
-    fontSize: 14,
-    paddingTop: 2,
-  },
-  addDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#aa44ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
+    paddingHorizontal: theme.spacing.xxl,
   },
   divider: {
     height: 1,
-    backgroundColor: '#222',
-    marginVertical: 20,
+    backgroundColor: theme.colors.divider,
+    marginVertical: theme.spacing.xl,
   },
   form: {
-    gap: 16,
+    gap: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
   fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: theme.spacing.md,
   },
   label: {
-    color: '#aaa',
-    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.sm,
     width: 80,
     textAlign: 'right',
   },
   input: {
     flex: 1,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceInput,
+    borderRadius: theme.radius.sm,
     borderWidth: 1.5,
-    borderColor: '#2a2a2a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: '#fff',
-    fontSize: 14,
+    borderColor: theme.colors.surfaceInput,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.md,
   },
   inputSmall: {
     flex: 0,
@@ -210,34 +202,30 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   addButton: {
-    backgroundColor: '#aa00ff',
-    borderRadius: 20,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
+    marginTop: theme.spacing.sm,
   },
   cepContainer: {
     flex: 1,
-    gap: 4,
+    gap: theme.spacing.xs,
   },
   cepInput: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceInput,
+    borderRadius: theme.radius.sm,
     borderWidth: 1.5,
-    borderColor: '#2a2a2a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: '#fff',
-    fontSize: 14,
+    borderColor: theme.colors.surfaceInput,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.md,
   },
   hint: {
-    color: '#aa44ff',
-    fontSize: 12,
-    marginTop: 4,
+    color: theme.colors.purpleAlt,
+    fontSize: theme.fontSize.xs,
+    marginTop: theme.spacing.xs,
+  },
+  errorHint: {
+    color: theme.colors.danger,
+    fontSize: theme.fontSize.xs,
+    marginTop: theme.spacing.xs,
   },
 });

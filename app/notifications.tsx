@@ -1,37 +1,38 @@
-import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
-const NOTIFICATIONS = [
-  { id: '1', message: 'Seu motorista chegou', date: '14/07', read: false },
-  { id: '2', message: 'Seu motorista está quase chegando', date: '14/07', read: false },
-  { id: '3', message: 'Vc foi adicionado em uma turma', date: '14/07', read: false },
-  { id: '4', message: 'Nova mensagem', date: '14/07', read: false },
-  { id: '5', message: 'Horário determinado', date: '14/07', read: false },
-  { id: '6', message: 'Novo contato', date: '14/07', read: true },
-  { id: '7', message: 'Novo contato', date: '14/07', read: true },
-];
+import { Avatar } from '@/components/ui/Avatar';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Header } from '@/components/ui/Header';
+import { Screen } from '@/components/ui/Screen';
+import { theme } from '@/constants/theme';
+import { getNotifications } from '@/services/notificationService';
+import type { AppNotification } from '@/types';
 
 export default function Notifications() {
   const router = useRouter();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getNotifications().then((data) => {
+      setNotifications(data);
+      setLoading(false);
+    });
+  }, []);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back-ios" size={22} color="#aa44ff" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Notificações</Text>
-      </View>
+    <Screen contentContainerStyle={styles.container}>
+      <Header title="Notificações" onBack={() => router.back()} />
 
       <FlatList
-        data={NOTIFICATIONS}
+        data={notifications}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <View style={styles.item}>
-            <View style={styles.avatar}>
-              <MaterialIcons name="person" size={28} color="#fff" />
-            </View>
+            <Avatar size={48} iconSize={28} />
             <Text style={styles.message}>{item.message}</Text>
             <View style={styles.right}>
               <Text style={styles.date}>{item.date}</Text>
@@ -40,69 +41,51 @@ export default function Notifications() {
           </View>
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          !loading ? <EmptyState icon="notifications-none" title="Nenhuma notificação por aqui" /> : null
+        }
       />
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
-    paddingTop: 60,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 12,
-  },
-  title: {
-    color: '#aa44ff',
-    fontSize: 18,
-    fontWeight: '700',
+  list: {
+    paddingHorizontal: theme.spacing.xl,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 14,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: theme.spacing.lg,
+    gap: theme.spacing.md + 2,
   },
   message: {
-    color: '#fff',
-    fontSize: 14,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.md,
     flex: 1,
   },
   right: {
     alignItems: 'flex-end',
-    gap: 6,
+    gap: theme.spacing.xs + 2,
   },
   date: {
-    color: '#888',
-    fontSize: 12,
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSize.xs,
   },
   dot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#ff8800',
+    backgroundColor: theme.colors.warning,
   },
   dotRead: {
-    backgroundColor: '#555',
+    backgroundColor: theme.colors.textFaint,
   },
   separator: {
     height: 1,
-    backgroundColor: '#222',
-    marginHorizontal: 20,
+    backgroundColor: theme.colors.divider,
   },
 });

@@ -1,145 +1,172 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-const PASSENGERS = [
-  { id: '1', name: 'Emily Carter' },
-  { id: '2', name: 'Jhon Smith' },
-  { id: '3', name: 'Trevor Jamal' },
-];
+import { Avatar } from '@/components/ui/Avatar';
+import { SideMenu } from '@/components/features/home/SideMenu';
+import { commonStrings } from '@/constants/strings';
+import { theme } from '@/constants/theme';
+import { useSession } from '@/context/SessionContext';
+import { ApiError } from '@/services/api/client';
+import { listAlunos, type Passenger } from '@/services/alunosService';
 
 export default function DriverHome() {
   const router = useRouter();
-  const { name } = useLocalSearchParams<{ name: string }>();
+  const session = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [passengers, setPassengers] = useState<Passenger[]>([]);
+  const [loadingPassengers, setLoadingPassengers] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const filtered = PASSENGERS.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    let isMounted = true;
+    listAlunos()
+      .then((data) => {
+        if (!isMounted) return;
+        setPassengers(data);
+        setLoadingPassengers(false);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setLoadError(err instanceof ApiError ? err.message : commonStrings.feedback.genericError);
+        setLoadingPassengers(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filtered = passengers.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const driverName = session.user?.name ?? 'Motorista';
+  const vanInfo = [session.user?.modeloVan, session.user?.placaVan].filter(Boolean).join(' • ');
+
+  function handleLogout() {
+    setMenuOpen(false);
+    session.logout();
+    router.replace('/');
+  }
+
+  function handleStartRide() {
+    Alert.alert('Em breve', commonStrings.feedback.featureInDevelopment);
+  }
 
   return (
-    <View style={styles.container}>
-      {/* Menu Burger Modal */}
-      <Modal visible={menuOpen} transparent animationType="fade">
-        <TouchableOpacity style={styles.overlay} onPress={() => setMenuOpen(false)}>
-          <View style={styles.menu}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); router.replace('/'); }}>
-              <MaterialIcons name="logout" size={20} color="#fff" />
-              <Text style={styles.menuItemText}>Sair</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+      <SideMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onProfilePress={() => {
+          setMenuOpen(false);
+          router.push('/profile');
+        }}
+        onLogoutPress={handleLogout}
+      />
 
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => setMenuOpen(true)}>
-          <MaterialIcons name="menu" size={28} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.notifButton}>
-          <MaterialIcons name="notifications" size={26} color="#fff" />
+        <Pressable
+          onPress={() => setMenuOpen(true)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir menu">
+          <MaterialIcons name="menu" size={28} color={theme.colors.white} />
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/notifications')}
+          style={styles.notifButton}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Ver notificações">
+          <MaterialIcons name="notifications" size={26} color={theme.colors.white} />
           <View style={styles.notifDot} />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
-      {/* Greeting */}
       <View style={styles.greetingRow}>
-        <View style={styles.avatar}>
-          <MaterialIcons name="person" size={40} color="#fff" />
-        </View>
+        <Avatar size={64} iconSize={40} />
         <View>
           <Text style={styles.greetingTop}>BOM DIA</Text>
-          <Text style={styles.greetingName}>{(name || 'Motorista').toUpperCase()}</Text>
+          <Text style={styles.greetingName}>{driverName.toUpperCase()}</Text>
+          {vanInfo ? <Text style={styles.vanInfo}>{vanInfo}</Text> : null}
         </View>
       </View>
 
-      {/* Action Buttons */}
       <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.actionButtonDark} onPress={() => router.push('/edit-route')}>
-          <MaterialIcons name="edit" size={28} color="#fff" />
+        <Pressable
+          style={({ pressed }) => [styles.actionButtonDark, pressed && styles.actionPressed]}
+          onPress={() => router.push('/edit-route')}
+          accessibilityRole="button"
+          accessibilityLabel="Editar corrida">
+          <MaterialIcons name="edit" size={28} color={theme.colors.white} />
           <Text style={styles.actionText}>Editar corrida</Text>
-        </TouchableOpacity>
-        <LinearGradient colors={['#cc00ff', '#ff00aa']} style={styles.actionButtonGradient}>
-          <TouchableOpacity style={styles.actionButtonInner}>
-            <MaterialIcons name="place" size={28} color="#fff" />
-            <Text style={styles.actionText}>começar</Text>
-          </TouchableOpacity>
-        </LinearGradient>
+        </Pressable>
+        <Pressable
+          onPress={handleStartRide}
+          accessibilityRole="button"
+          accessibilityLabel="Começar corrida"
+          style={({ pressed }) => [pressed && styles.actionPressed]}>
+          <LinearGradient colors={theme.gradients.action} style={styles.actionButtonGradient}>
+            <View style={styles.actionButtonInner}>
+              <MaterialIcons name="place" size={28} color={theme.colors.white} />
+              <Text style={styles.actionText}>começar</Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
       </View>
 
-      {/* Passengers */}
-      <Text style={styles.sectionTitle}>PASSENGERS</Text>
+      <Text style={styles.sectionTitle}>PASSAGEIROS</Text>
 
       <View style={styles.searchRow}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search..."
-          placeholderTextColor="#888"
+          placeholder="Buscar..."
+          placeholderTextColor={theme.colors.textMuted}
           value={search}
           onChangeText={setSearch}
+          accessibilityLabel="Buscar passageiro"
         />
-        <MaterialIcons name="search" size={22} color="#888" />
+        <MaterialIcons name="search" size={22} color={theme.colors.textMuted} />
       </View>
+
+      {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
+      {loadingPassengers ? <Text style={styles.hintText}>{commonStrings.feedback.loading}</Text> : null}
 
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         style={styles.list}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.passengerItem}
+          <Pressable
+            style={({ pressed }) => [styles.passengerItem, pressed && styles.actionPressed]}
             onPress={() => router.push({ pathname: '/chat', params: { contactName: item.name } })}
-          >
-            <View style={styles.passengerAvatar}>
-              <MaterialIcons name="person" size={28} color="#fff" />
-            </View>
+            accessibilityRole="button"
+            accessibilityLabel={`Conversar com ${item.name}`}>
+            <Avatar size={48} iconSize={28} />
             <Text style={styles.passengerName}>{item.name.toUpperCase()}</Text>
-            <MaterialIcons name="arrow-forward-ios" size={18} color="#fff" />
-          </TouchableOpacity>
+            <MaterialIcons name="arrow-forward-ios" size={18} color={theme.colors.white} />
+          </Pressable>
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
-    paddingTop: 60,
-    paddingHorizontal: 20,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  menu: {
-    backgroundColor: '#1a1a1a',
-    width: 180,
-    margin: 20,
-    marginTop: 60,
-    borderRadius: 12,
-    padding: 16,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-  },
-  menuItemText: {
-    color: '#fff',
-    fontSize: 16,
+    backgroundColor: theme.colors.background,
+    paddingTop: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.xl,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: theme.spacing.xxl,
   },
   notifButton: {
     position: 'relative',
@@ -149,110 +176,112 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#ff8800',
+    backgroundColor: theme.colors.warning,
     top: 0,
     right: 0,
   },
   greetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 28,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: theme.spacing.lg,
+    marginBottom: theme.spacing.xxl + theme.spacing.xs,
   },
   greetingTop: {
-    color: '#aaa',
-    fontSize: 14,
-    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.bold,
     letterSpacing: 1,
   },
   greetingName: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '900',
+    color: theme.colors.white,
+    fontSize: theme.fontSize.xl,
+    fontWeight: theme.fontWeight.black,
     letterSpacing: 1,
+  },
+  vanInfo: {
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSize.sm,
+    marginTop: theme.spacing.xs,
+  },
+  errorText: {
+    color: theme.colors.danger,
+    fontSize: theme.fontSize.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  hintText: {
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSize.sm,
+    marginBottom: theme.spacing.sm,
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 28,
+    gap: theme.spacing.lg,
+    marginBottom: theme.spacing.xxl + theme.spacing.xs,
+  },
+  actionPressed: {
+    opacity: 0.8,
   },
   actionButtonDark: {
     flex: 1,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 16,
-    padding: 20,
-    gap: 8,
+    backgroundColor: theme.colors.surfaceInput,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.sm,
   },
   actionButtonGradient: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: theme.radius.lg,
   },
   actionButtonInner: {
-    padding: 20,
-    gap: 8,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.sm,
   },
   actionText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.md,
   },
   sectionTitle: {
-    color: '#fff',
-    fontWeight: '900',
-    fontSize: 18,
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.black,
+    fontSize: theme.fontSize.xl,
     letterSpacing: 2,
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 16,
+    backgroundColor: theme.colors.surfaceCard,
+    borderRadius: theme.radius.xl,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.lg,
   },
   searchInput: {
     flex: 1,
-    color: '#fff',
-    fontSize: 15,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.base,
   },
   list: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16,
+    backgroundColor: theme.colors.surfaceCard,
+    borderRadius: theme.radius.lg,
   },
   passengerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    gap: 14,
-  },
-  passengerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md + 2,
   },
   passengerName: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.md,
     flex: 1,
     letterSpacing: 1,
   },
   separator: {
     height: 1,
-    backgroundColor: '#333',
-    marginHorizontal: 16,
+    backgroundColor: theme.colors.borderMuted,
+    marginHorizontal: theme.spacing.lg,
   },
 });

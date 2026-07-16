@@ -1,130 +1,131 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-const INITIAL_MESSAGES: { id: string; text: string; mine: boolean }[] = [];
+import { MessageBubble } from '@/components/features/chat/MessageBubble';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Header } from '@/components/ui/Header';
+import { Screen } from '@/components/ui/Screen';
+import { commonStrings } from '@/constants/strings';
+import { theme } from '@/constants/theme';
+import { getMessages, sendMessage } from '@/services/messageService';
+import type { ChatMessage } from '@/types';
 
 export default function Chat() {
   const router = useRouter();
-  const { contactName } = useLocalSearchParams<{ contactName: string }>();
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const { contactName } = useLocalSearchParams<{ contactName?: string }>();
+  const contact = contactName || 'Contato';
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
-  const listRef = useRef<FlatList>(null);
+  const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  function sendMessage() {
+  useEffect(() => {
+    getMessages(contact).then(setMessages);
+  }, [contact]);
+
+  async function handleSend() {
     if (!text.trim()) return;
-    setMessages((prev) => [...prev, { id: Date.now().toString(), text: text.trim(), mine: true }]);
+    const message = await sendMessage(contact, text.trim());
+    setMessages((prev) => [...prev, message]);
     setText('');
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }
 
+  function handleFeatureInDevelopment() {
+    Alert.alert('Em breve', commonStrings.feedback.featureInDevelopment);
+  }
+
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back-ios" size={22} color="#aa44ff" />
-        </TouchableOpacity>
-        <MaterialIcons name="account-circle" size={36} color="#888" />
-        <Text style={styles.headerName}>{contactName || 'Contato'}</Text>
-      </View>
+    <Screen keyboardAvoiding contentContainerStyle={styles.container}>
+      <Header
+        onBack={() => router.back()}
+        center={
+          <View style={styles.headerCenter}>
+            <MaterialIcons name="account-circle" size={36} color={theme.colors.textMuted} />
+            <Text style={styles.headerName}>{contact}</Text>
+          </View>
+        }
+      />
 
       <FlatList
         ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
-        renderItem={({ item }) => (
-          <View style={[styles.bubble, item.mine ? styles.bubbleMine : styles.bubbleOther]}>
-            <Text style={styles.bubbleText}>{item.text}</Text>
-          </View>
-        )}
+        renderItem={({ item }) => <MessageBubble message={item} />}
+        ListEmptyComponent={<EmptyState icon="chat-bubble-outline" title="Nenhuma mensagem ainda" description="Envie a primeira mensagem para iniciar a conversa." />}
       />
 
       <View style={styles.inputRow}>
-        <MaterialIcons name="sentiment-satisfied" size={26} color="#888" />
+        <Pressable onPress={handleFeatureInDevelopment} hitSlop={8} accessibilityRole="button" accessibilityLabel="Enviar emoji">
+          <MaterialIcons name="sentiment-satisfied" size={26} color={theme.colors.textMuted} />
+        </Pressable>
         <TextInput
           style={styles.input}
-          placeholder="Send a message"
-          placeholderTextColor="#666"
+          placeholder="Enviar mensagem"
+          placeholderTextColor={theme.colors.textDim}
           value={text}
           onChangeText={setText}
-          onSubmitEditing={sendMessage}
+          onSubmitEditing={handleSend}
+          accessibilityLabel="Campo de mensagem"
         />
-        <MaterialIcons name="attach-file" size={24} color="#888" />
-        <MaterialIcons name="camera-alt" size={24} color="#888" />
-        <TouchableOpacity style={styles.micButton} onPress={sendMessage}>
-          <MaterialIcons name={text.trim() ? 'send' : 'mic'} size={24} color="#fff" />
-        </TouchableOpacity>
+        <Pressable onPress={handleFeatureInDevelopment} hitSlop={8} accessibilityRole="button" accessibilityLabel="Anexar arquivo">
+          <MaterialIcons name="attach-file" size={24} color={theme.colors.textMuted} />
+        </Pressable>
+        <Pressable onPress={handleFeatureInDevelopment} hitSlop={8} accessibilityRole="button" accessibilityLabel="Tirar foto">
+          <MaterialIcons name="camera-alt" size={24} color={theme.colors.textMuted} />
+        </Pressable>
+        <Pressable
+          style={styles.sendButton}
+          onPress={text.trim() ? handleSend : handleFeatureInDevelopment}
+          accessibilityRole="button"
+          accessibilityLabel={text.trim() ? 'Enviar mensagem' : 'Gravar áudio'}>
+          <MaterialIcons name={text.trim() ? 'send' : 'mic'} size={24} color={theme.colors.white} />
+        </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
   },
-  header: {
+  headerCenter: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 16,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    gap: theme.spacing.sm + 2,
   },
   headerName: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: theme.colors.white,
+    fontSize: theme.fontSize.xl,
+    fontWeight: theme.fontWeight.bold,
   },
   messagesList: {
-    padding: 16,
-    gap: 12,
-  },
-  bubble: {
-    maxWidth: '75%',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 8,
-  },
-  bubbleMine: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#cc00ff',
-    borderBottomRightRadius: 4,
-  },
-  bubbleOther: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#2a2a2a',
-    borderBottomLeftRadius: 4,
-  },
-  bubbleText: {
-    color: '#fff',
-    fontSize: 15,
-    lineHeight: 22,
+    flexGrow: 1,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
+    backgroundColor: theme.colors.surfaceCard,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm + 2,
+    gap: theme.spacing.md - 2,
   },
   input: {
     flex: 1,
-    color: '#fff',
-    fontSize: 15,
-    paddingVertical: 6,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.base,
+    paddingVertical: theme.spacing.xs + 2,
   },
-  micButton: {
+  sendButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#aa00ff',
+    backgroundColor: theme.colors.purple,
     alignItems: 'center',
     justifyContent: 'center',
   },

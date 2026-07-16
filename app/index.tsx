@@ -1,39 +1,69 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
-export default function HomeScreen() {
+import { Screen } from '@/components/ui/Screen';
+import { theme } from '@/constants/theme';
+import { useSession } from '@/context/SessionContext';
+import type { UserRole } from '@/types';
+
+export default function RoleSelection() {
   const router = useRouter();
+  const session = useSession();
+
+  // If a session was restored from SecureStore on app start, skip straight
+  // past role selection + login. Waits for isLoading to settle first so we
+  // don't flash the role-selection buttons before the restore finishes.
+  useEffect(() => {
+    if (session.isLoading || !session.user) return;
+    router.replace(session.user.role === 'driver' ? '/driver-home' : '/passenger-home');
+  }, [session.isLoading, session.user, router]);
+
+  function goToLogin(role: UserRole) {
+    router.push({ pathname: '/login', params: { role } });
+  }
+
+  if (session.isLoading || session.user) {
+    return <Screen contentContainerStyle={styles.container}>{null}</Screen>;
+  }
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={['#aa00ff', '#ff00cc']} style={[styles.circle, styles.circleTopRight]} />
-      <LinearGradient colors={['#6600cc', '#ff00aa']} style={[styles.circle, styles.circleBottomLeft]} />
+    <Screen contentContainerStyle={styles.container}>
+      <LinearGradient colors={theme.gradients.purplePink} style={[styles.circle, styles.circleTopRight]} />
+      <LinearGradient colors={[theme.colors.purpleDeep, theme.colors.pinkDeep]} style={[styles.circle, styles.circleBottomLeft]} />
 
-      <Text style={styles.title}>YOU ARE</Text>
+      <Text style={styles.title}>VOCÊ É</Text>
 
-      <TouchableOpacity style={styles.button} onPress={() => router.push({ pathname: '/login', params: { role: 'passenger' } })}>
-        <MaterialIcons name="person" size={32} color="#cc44cc" />
-        <Text style={styles.buttonText}>PASSENGER</Text>
-        <MaterialIcons name="play-arrow" size={24} color="#cc44cc" />
-      </TouchableOpacity>
+      <Pressable
+        style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+        onPress={() => goToLogin('passenger')}
+        accessibilityRole="button"
+        accessibilityLabel="Entrar como passageiro">
+        <MaterialIcons name="person" size={32} color={theme.colors.purpleLight} />
+        <Text style={styles.buttonText}>PASSAGEIRO</Text>
+        <MaterialIcons name="play-arrow" size={24} color={theme.colors.purpleLight} />
+      </Pressable>
 
-      <TouchableOpacity style={styles.button} onPress={() => router.push({ pathname: '/login', params: { role: 'driver' } })}>
-        <MaterialIcons name="directions-car" size={32} color="#cc44cc" />
-        <Text style={styles.buttonText}>DRIVER</Text>
-        <MaterialIcons name="play-arrow" size={24} color="#cc44cc" />
-      </TouchableOpacity>
-    </View>
+      <Pressable
+        style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+        onPress={() => goToLogin('driver')}
+        accessibilityRole="button"
+        accessibilityLabel="Entrar como motorista">
+        <MaterialIcons name="directions-car" size={32} color={theme.colors.purpleLight} />
+        <Text style={styles.buttonText}>MOTORISTA</Text>
+        <MaterialIcons name="play-arrow" size={24} color={theme.colors.purpleLight} />
+      </Pressable>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: theme.spacing.xxxl,
   },
   circle: {
     position: 'absolute',
@@ -50,27 +80,30 @@ const styles = StyleSheet.create({
     left: -60,
   },
   title: {
-    color: '#ffffff',
-    fontSize: 36,
-    fontWeight: '900',
-    marginBottom: 40,
+    color: theme.colors.textPrimary,
+    fontSize: theme.fontSize.display,
+    fontWeight: theme.fontWeight.black,
+    marginBottom: theme.spacing.xxxl + theme.spacing.sm,
     letterSpacing: 2,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#cc44cc',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    gap: 16,
+    borderColor: theme.colors.purpleLight,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.xl,
+    gap: theme.spacing.lg,
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
+  buttonPressed: {
+    opacity: 0.75,
+  },
   buttonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    fontSize: theme.fontSize.xl,
+    fontWeight: theme.fontWeight.extraBold,
     flex: 1,
     letterSpacing: 2,
   },
