@@ -9,9 +9,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.vanmos.tccexpo",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "O VanMos usa sua localização para compartilhar em tempo real a posição da van durante a corrida."
+      }
     },
     "android": {
+      "package": "com.vanmos.tccexpo",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -39,7 +44,13 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O VanMos usa sua localização para compartilhar em tempo real a posição da van durante a corrida."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

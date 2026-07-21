@@ -161,7 +161,11 @@ export default function PassengerHome() {
 
           <Pressable
             style={styles.addressButton}
-            onPress={handleFeatureInDevelopment}
+            onPress={() =>
+              meuAluno?.motoristaId
+                ? router.push({ pathname: '/tracking', params: { motoristaId: String(meuAluno.motoristaId), contactName: 'Motorista' } })
+                : handleFeatureInDevelopment()
+            }
             accessibilityRole="button"
             accessibilityLabel="Ver localização no mapa">
             <MaterialIcons name="place" size={20} color={theme.colors.white} />

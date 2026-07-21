@@ -12,6 +12,7 @@ import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { ApiError } from '@/services/api/client';
 import { listAlunos, type Passenger } from '@/services/alunosService';
+import { startSharingLocation, stopSharingLocation } from '@/services/locationService';
 
 export default function DriverHome() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function DriverHome() {
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [loadingPassengers, setLoadingPassengers] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [rideActive, setRideActive] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,14 +46,27 @@ export default function DriverHome() {
   const driverName = session.user?.name ?? 'Motorista';
   const vanInfo = [session.user?.modeloVan, session.user?.placaVan].filter(Boolean).join(' • ');
 
+  useEffect(() => {
+    return () => {
+      void stopSharingLocation();
+    };
+  }, []);
+
   function handleLogout() {
     setMenuOpen(false);
     session.logout();
     router.replace('/');
   }
 
-  function handleStartRide() {
-    Alert.alert('Em breve', commonStrings.feedback.featureInDevelopment);
+  async function handleStartRide() {
+    if (rideActive) {
+      await stopSharingLocation();
+      setRideActive(false);
+      return;
+    }
+
+    const started = await startSharingLocation((message) => Alert.alert('Não foi possível iniciar', message));
+    setRideActive(started);
   }
 
   return (
@@ -106,12 +121,12 @@ export default function DriverHome() {
         <Pressable
           onPress={handleStartRide}
           accessibilityRole="button"
-          accessibilityLabel="Começar corrida"
+          accessibilityLabel={rideActive ? 'Encerrar corrida' : 'Começar corrida'}
           style={({ pressed }) => [pressed && styles.actionPressed]}>
           <LinearGradient colors={theme.gradients.action} style={styles.actionButtonGradient}>
             <View style={styles.actionButtonInner}>
-              <MaterialIcons name="place" size={28} color={theme.colors.white} />
-              <Text style={styles.actionText}>começar</Text>
+              <MaterialIcons name={rideActive ? 'stop-circle' : 'place'} size={28} color={theme.colors.white} />
+              <Text style={styles.actionText}>{rideActive ? 'encerrar corrida' : 'começar'}</Text>
             </View>
           </LinearGradient>
         </Pressable>

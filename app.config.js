@@ -14,9 +14,22 @@ const DEFAULT_API_BASE_URL = 'http://localhost:8080/api';
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || DEFAULT_API_BASE_URL;
 
+// Chave do Google Maps (Android only — ver .env.example). Sem ela, o mapa
+// de rastreamento (app/tracking.tsx) renderiza em branco no Android.
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
 /** @type {import('@expo/config-types').ExpoConfig} */
 module.exports = {
   ...appJson.expo,
+  android: {
+    ...appJson.expo.android,
+    config: {
+      ...appJson.expo.android?.config,
+      googleMaps: {
+        apiKey: GOOGLE_MAPS_API_KEY,
+      },
+    },
+  },
   extra: {
     ...appJson.expo.extra,
     apiBaseUrl: API_BASE_URL,

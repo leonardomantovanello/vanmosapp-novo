@@ -12,6 +12,7 @@ import {
 import { Alert } from 'react-native';
 
 import { registerTokenHandlers } from '@/services/api/client';
+import { connectRealtime, disconnectRealtime } from '@/services/realtime/stompClient';
 import { clearSession, loadSession, saveSession, updateAccessToken, updateStoredUser } from '@/services/tokenStorage';
 import type { UserRole } from '@/types';
 
@@ -107,6 +108,19 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setUser(null);
     void clearSession();
   }, []);
+
+  // Abre a conexão STOMP (chat/localização em tempo real) assim que houver
+  // um usuário logado — seja por login explícito ou por sessão restaurada
+  // do SecureStore — e fecha ao deslogar. Reage a accessToken também para
+  // que uma renovação de token (ver onTokensRefreshed abaixo) atualize os
+  // headers usados na próxima reconexão.
+  useEffect(() => {
+    if (user?.accessToken) {
+      connectRealtime(user.accessToken);
+    } else {
+      disconnectRealtime();
+    }
+  }, [user?.accessToken]);
 
   // Registered once; reads current tokens via userRef so it never goes
   // stale. See services/api/client.ts for how these are used.

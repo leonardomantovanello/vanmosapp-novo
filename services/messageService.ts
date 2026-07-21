@@ -10,7 +10,7 @@ import type { ChatMessage } from '@/types';
 // currentUserId is the logged-in Passageiro id (session.user.id): messages
 // don't carry an isMine flag from the backend, so "mine" is derived here by
 // comparing remetenteId against whoever is currently logged in.
-function toChatMessage(mensagem: MensagemDTO, currentUserId: number): ChatMessage {
+export function toChatMessage(mensagem: MensagemDTO, currentUserId: number): ChatMessage {
   return {
     id: String(mensagem.id),
     text: mensagem.texto,
