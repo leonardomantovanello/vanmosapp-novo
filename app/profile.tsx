@@ -11,7 +11,7 @@ import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { ApiError } from '@/services/api/client';
 import { getProfile, updateProfile } from '@/services/profileService';
-import { maskCnh, maskPhone } from '@/utils/masks';
+import { maskCnh } from '@/utils/masks';
 import { isRequired, isValidEmail } from '@/utils/validation';
 
 export default function Profile() {
@@ -23,11 +23,12 @@ export default function Profile() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [school, setSchool] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [idade, setIdade] = useState('');
+  const [genero, setGenero] = useState('');
   const [cnh, setCnh] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
+  const [modeloVan, setModeloVan] = useState('');
+  const [placaVan, setPlacaVan] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,10 +43,12 @@ export default function Profile() {
         setAvatarUri(profile.avatarUri);
         setFullName(profile.name || session.user?.name || '');
         setEmail(profile.email || session.user?.email || '');
-        setPhone(profile.phone);
-        setAddress(profile.address);
-        setSchool(profile.school);
+        setCpf(profile.cpf ?? '');
+        setIdade(profile.idade != null ? String(profile.idade) : '');
+        setGenero(profile.genero ?? '');
         setCnh(profile.cnh ?? '');
+        setModeloVan(profile.modeloVan ?? '');
+        setPlacaVan(profile.placaVan ?? '');
         setLoading(false);
       })
       .catch((err) => {
@@ -77,15 +80,6 @@ export default function Profile() {
       setFeedback(null);
       return;
     }
-    // The backend requires the current password to be re-sent on every
-    // profile save (see services/profileService.ts for exactly why — short
-    // version: it's a real constraint of the update endpoints, not a
-    // gratuitous UX choice on our end).
-    if (!isRequired(currentPassword)) {
-      setError('Informe sua senha atual para salvar as alterações.');
-      setFeedback(null);
-      return;
-    }
     if (!userId) {
       setError('Sessão inválida. Faça login novamente.');
       setFeedback(null);
@@ -100,12 +94,13 @@ export default function Profile() {
         {
           name: fullName.trim(),
           email: email.trim(),
-          phone,
-          address,
-          school,
-          cnh: role === 'driver' ? cnh : undefined,
+          cpf: cpf.trim() || null,
+          idade: role === 'passenger' && idade.trim() ? Number(idade) : null,
+          genero: role === 'passenger' ? genero.trim() || null : null,
+          cnh: role === 'driver' ? cnh : null,
+          modeloVan: role === 'driver' ? modeloVan.trim() || null : null,
+          placaVan: role === 'driver' ? placaVan.trim() || null : null,
           avatarUri,
-          currentPassword,
         },
         { id: userId, role }
       );
@@ -114,9 +109,6 @@ export default function Profile() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível salvar as alterações.');
     } finally {
-      // Cleared on both success and failure — never kept around longer than
-      // the single request that needed it.
-      setCurrentPassword('');
       setSaving(false);
     }
   }
@@ -158,53 +150,67 @@ export default function Profile() {
             containerStyle={styles.field}
           />
           <TextField
-            label="Telefone"
-            placeholder="Digite seu telefone"
-            value={phone}
-            onChangeText={(text) => setPhone(maskPhone(text))}
-            keyboardType="phone-pad"
+            label="CPF"
+            placeholder="Digite seu CPF"
+            value={cpf}
+            onChangeText={setCpf}
+            keyboardType="numeric"
             editable={!loading}
             containerStyle={styles.field}
           />
-          <TextField
-            label="Endereço"
-            placeholder="Digite seu endereço"
-            value={address}
-            onChangeText={setAddress}
-            editable={!loading}
-            containerStyle={styles.field}
-          />
-          <TextField
-            label="Escola"
-            placeholder="Digite sua escola"
-            value={school}
-            onChangeText={setSchool}
-            editable={!loading}
-            containerStyle={styles.field}
-          />
-          {role === 'driver' ? (
-            <TextField
-              label="CNH"
-              placeholder="Número da CNH"
-              value={cnh}
-              onChangeText={(text) => setCnh(maskCnh(text))}
-              keyboardType="numeric"
-              maxLength={11}
-              editable={!loading}
-              containerStyle={styles.field}
-            />
-          ) : null}
 
-          <TextField
-            label="Senha atual"
-            placeholder="Confirme sua senha para salvar"
-            value={currentPassword}
-            onChangeText={setCurrentPassword}
-            secureTextEntry
-            editable={!loading}
-            hint="Necessária para confirmar as alterações do seu perfil."
-            containerStyle={styles.field}
-          />
+          {role === 'passenger' ? (
+            <>
+              <TextField
+                label="Idade"
+                placeholder="Digite sua idade"
+                value={idade}
+                onChangeText={setIdade}
+                keyboardType="numeric"
+                maxLength={3}
+                editable={!loading}
+                containerStyle={styles.field}
+              />
+              <TextField
+                label="Gênero"
+                placeholder="Digite seu gênero"
+                value={genero}
+                onChangeText={setGenero}
+                editable={!loading}
+                containerStyle={styles.field}
+              />
+            </>
+          ) : (
+            <>
+              <TextField
+                label="CNH"
+                placeholder="Número da CNH"
+                value={cnh}
+                onChangeText={(text) => setCnh(maskCnh(text))}
+                keyboardType="numeric"
+                maxLength={11}
+                editable={!loading}
+                containerStyle={styles.field}
+              />
+              <TextField
+                label="Modelo da van"
+                placeholder="Digite o modelo"
+                value={modeloVan}
+                onChangeText={setModeloVan}
+                editable={!loading}
+                containerStyle={styles.field}
+              />
+              <TextField
+                label="Placa da van"
+                placeholder="Digite a placa"
+                value={placaVan}
+                onChangeText={setPlacaVan}
+                autoCapitalize="characters"
+                editable={!loading}
+                containerStyle={styles.field}
+              />
+            </>
+          )}
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {feedback ? <Text style={styles.successText}>{feedback}</Text> : null}

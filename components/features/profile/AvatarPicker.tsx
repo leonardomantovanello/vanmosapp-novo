@@ -23,11 +23,16 @@ export function AvatarPicker({ uri, onChange, size = 120 }: AvatarPickerProps) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.5,
+      base64: true,
     });
 
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      onChange(result.assets[0].uri);
+    // base64 (not the local file:// uri) is what actually survives being
+    // sent to the backend — see profileService.ts, which stores this as a
+    // data URI directly (no file storage/CDN set up for the project).
+    const asset = result.canceled ? null : result.assets?.[0];
+    if (asset?.base64) {
+      onChange(`data:image/jpeg;base64,${asset.base64}`);
     }
   }
 

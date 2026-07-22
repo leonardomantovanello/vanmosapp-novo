@@ -18,10 +18,12 @@ export interface ApiEnvelope<T> {
   timestamp?: string;
 }
 
-// Mirrors model/entity/Cadastro.java (guardian/responsável signup + login).
-// `senha` is intentionally omitted — the API never returns it (stripped
-// server-side in every controller method before the response is built).
-export interface CadastroDTO {
+// Mirrors model/entity/Passageiro.java (guardian/responsável signup +
+// login — table was renamed from "cadastro" to "passageiros", see
+// V2__rename_cadastro_to_passageiros.sql). `senha` is intentionally
+// omitted — the API never returns it (stripped server-side in every
+// controller method before the response is built).
+export interface PassageiroDTO {
   id: number;
   nome: string;
   idade: number | null;
@@ -30,6 +32,9 @@ export interface CadastroDTO {
   email: string;
   aceitouTermos: boolean;
   ativo: boolean;
+  // Data URI ("data:image/jpeg;base64,...") — no file storage/CDN set up
+  // for the project, so the image itself lives in this column (see V9).
+  avatarBase64: string | null;
 }
 
 // Mirrors model/entity/MotoristasAdmin.java (driver profile + login).
@@ -43,6 +48,7 @@ export interface MotoristaAdminDTO {
   nomeCompleto: string;
   placaVan: string | null;
   ativo: boolean;
+  avatarBase64: string | null;
 }
 
 // Mirrors model/entity/Aluno.java. GET /api/alunos is filtered server-side:

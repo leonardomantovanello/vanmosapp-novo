@@ -16,6 +16,7 @@ export default function Settings() {
   const router = useRouter();
   const session = useSession();
   const userId = session.user?.id;
+  const role = session.user?.role ?? 'passenger';
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -49,7 +50,7 @@ export default function Settings() {
 
     setSaving(true);
     try {
-      await changePassword(userId, currentPassword, newPassword);
+      await changePassword(userId, role, currentPassword, newPassword);
       setFeedback('Senha alterada com sucesso.');
       resetForm();
     } catch (err) {
