@@ -1,19 +1,47 @@
-import type { RouteStop, RouteStopInput } from '@/types';
+import { authorizedRequest } from '@/services/api/client';
+import type { RotaParadaDTO } from '@/types/api';
+import type { RouteStop } from '@/types';
 
-// INTENTIONALLY MOCK — no route/stop-editing backend exists yet. VanRepository/
-// VanController in vanmosapi-1 model vans, not per-driver editable route
-// stops, and there is no endpoint like POST /api/rotas or similar. Left on
-// in-memory mock data on purpose; not an oversight from the API-wiring pass.
-// Keep the listRouteStops/addRouteStop signatures stable so app/edit-route.tsx
-// doesn't need changes once a real endpoint exists.
-let stops: RouteStop[] = [];
-
-export async function listRouteStops(): Promise<RouteStop[]> {
-  return stops;
+function toRouteStop(dto: RotaParadaDTO): RouteStop {
+  return {
+    id: String(dto.id),
+    alunoId: String(dto.alunoId),
+    nome: dto.nome,
+    enderecoEmbarque: dto.enderecoEmbarque,
+    enderecoDesembarque: dto.enderecoDesembarque,
+    escola: dto.escola,
+    turno: dto.turno,
+    ordem: dto.ordem,
+  };
 }
 
-export async function addRouteStop(input: RouteStopInput): Promise<RouteStop> {
-  const stop: RouteStop = { id: Date.now().toString(), ...input };
-  stops = [...stops, stop];
-  return stop;
+// GET /api/rotas — rota padronizada do motorista logado, já ordenada.
+export async function listRouteStops(): Promise<RouteStop[]> {
+  const paradas = await authorizedRequest<RotaParadaDTO[]>('/rotas');
+  return paradas.map(toRouteStop);
+}
+
+// POST /api/rotas — adiciona um aluno (já cadastrado pelo motorista) como
+// próxima parada da rota.
+export async function addRouteStop(alunoId: string): Promise<RouteStop> {
+  const parada = await authorizedRequest<RotaParadaDTO>('/rotas', {
+    method: 'POST',
+    body: { alunoId: Number(alunoId) },
+  });
+  return toRouteStop(parada);
+}
+
+// DELETE /api/rotas/{id} — remove uma parada da rota.
+export async function removeRouteStop(id: string): Promise<void> {
+  await authorizedRequest<void>(`/rotas/${id}`, { method: 'DELETE' });
+}
+
+// PUT /api/rotas/reordenar — `ids` precisa ser a lista completa de paradas
+// atuais na nova ordem (ver RotaParadaService.reordenar no backend).
+export async function reorderRouteStops(ids: string[]): Promise<RouteStop[]> {
+  const paradas = await authorizedRequest<RotaParadaDTO[]>('/rotas/reordenar', {
+    method: 'PUT',
+    body: { ids: ids.map(Number) },
+  });
+  return paradas.map(toRouteStop);
 }

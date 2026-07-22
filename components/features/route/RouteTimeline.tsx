@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { theme } from '@/constants/theme';
@@ -7,9 +7,10 @@ import type { RouteStop } from '@/types';
 
 export interface RouteTimelineProps {
   stops: RouteStop[];
+  onRemove?: (id: string) => void;
 }
 
-export function RouteTimeline({ stops }: RouteTimelineProps) {
+export function RouteTimeline({ stops, onRemove }: RouteTimelineProps) {
   return (
     <View style={styles.container}>
       {stops.length === 0 ? (
@@ -25,14 +26,24 @@ export function RouteTimeline({ stops }: RouteTimelineProps) {
                 <View style={[styles.dot, index === 0 && styles.dotActive]} />
                 {index < stops.length - 1 && <View style={styles.line} />}
               </View>
-              <Text style={styles.name}>{item.nome}</Text>
+              <View style={styles.info}>
+                <Text style={styles.name}>{item.nome}</Text>
+                {item.enderecoEmbarque ? (
+                  <Text style={styles.address}>{item.enderecoEmbarque}</Text>
+                ) : null}
+              </View>
+              {onRemove ? (
+                <Pressable
+                  onPress={() => onRemove(item.id)}
+                  hitSlop={8}
+                  accessibilityLabel={`Remover ${item.nome} da rota`}>
+                  <MaterialIcons name="close" size={18} color={theme.colors.textMuted} />
+                </Pressable>
+              ) : null}
             </View>
           )}
         />
       )}
-      <View style={styles.addDot}>
-        <MaterialIcons name="add" size={20} color={theme.colors.white} />
-      </View>
     </View>
   );
 }
@@ -67,19 +78,17 @@ const styles = StyleSheet.create({
     height: 32,
     backgroundColor: theme.colors.purpleAlt,
   },
+  info: {
+    flex: 1,
+  },
   name: {
     color: theme.colors.white,
     fontSize: theme.fontSize.md,
     paddingTop: 2,
   },
-  addDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: theme.colors.purpleAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: theme.spacing.sm,
+  address: {
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSize.xs,
+    marginTop: 2,
   },
 });

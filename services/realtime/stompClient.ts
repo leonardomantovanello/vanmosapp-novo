@@ -31,13 +31,35 @@ export function connectRealtime(token: string): void {
     return;
   }
 
+  const wsUrl = toWebSocketUrl(API_BASE_URL);
   client = new Client({
-    brokerURL: toWebSocketUrl(API_BASE_URL),
+    // webSocketFactory (em vez de brokerURL) força o uso do WebSocket nativo
+    // do React Native. @stomp/stompjs tenta detectar sozinho se está rodando
+    // em browser ou Node.js quando só recebe brokerURL, e o RN também expõe
+    // um global "process" (como o Node), o que pode confundir essa detecção
+    // e fazer a lib tentar um caminho incompatível com o ambiente RN.
+    webSocketFactory: () => {
+      console.log('[stomp] factory chamada, criando WebSocket nativo para', wsUrl);
+      const socket = new WebSocket(wsUrl);
+      console.log('[stomp] WebSocket criado, readyState=', socket.readyState);
+      // addEventListener (não .onopen=) para não ser sobrescrito pelos
+      // handlers que o próprio @stomp/stompjs registra em seguida no mesmo
+      // objeto — isso é só diagnóstico temporário.
+      socket.addEventListener('open', () => console.log('[stomp] socket nativo: open'));
+      socket.addEventListener('error', (e: any) => console.log('[stomp] socket nativo: error', JSON.stringify(e?.message ?? e)));
+      socket.addEventListener('close', (e: any) => console.log('[stomp] socket nativo: close', e?.code, e?.reason));
+      return socket;
+    },
     connectHeaders: { Authorization: `Bearer ${token}` },
     reconnectDelay: 5000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
   });
+  console.log('[stomp] conectando em', wsUrl);
+  client.onConnect = () => console.log('[stomp] conectado');
+  client.onStompError = (frame) => console.log('[stomp] erro STOMP:', frame.headers['message'], frame.body);
+  client.onWebSocketError = (event) => console.log('[stomp] erro WebSocket:', event);
+  client.onWebSocketClose = (event) => console.log('[stomp] WebSocket fechado:', event.code, event.reason);
   client.activate();
 }
 
@@ -62,7 +84,9 @@ export function subscribeTopic<T>(destination: string, onMessage: (payload: T) =
 
   const doSubscribe = () => {
     if (cancelled) return;
+    console.log('[stomp] assinando', destination);
     stompSub = activeClient.subscribe(destination, (message: IMessage) => {
+      console.log('[stomp] mensagem recebida em', destination, message.body);
       try {
         onMessage(JSON.parse(message.body) as T);
       } catch {
@@ -89,6 +113,10 @@ export function subscribeTopic<T>(destination: string, onMessage: (payload: T) =
 
 /** Publica em um destino de aplicação (ex: /app/localizacao). Sem efeito se ainda não houver conexão ativa. */
 export function publish(destination: string, body: unknown): void {
-  if (!client?.connected) return;
+  if (!client?.connected) {
+    console.log('[stomp] publish ignorado (sem conexão):', destination);
+    return;
+  }
   client.publish({ destination, body: JSON.stringify(body) });
+  console.log('[stomp] publicado em', destination, body);
 }

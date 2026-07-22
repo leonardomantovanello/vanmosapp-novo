@@ -12,7 +12,8 @@ import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { ApiError } from '@/services/api/client';
 import { listAlunos, type Passenger } from '@/services/alunosService';
-import { startSharingLocation, stopSharingLocation } from '@/services/locationService';
+import { advanceRoute, endRoute, getRouteProgress, startRoute } from '@/services/routeProgressService';
+import type { RotaProgressoDTO } from '@/types/api';
 
 export default function DriverHome() {
   const router = useRouter();
@@ -22,7 +23,8 @@ export default function DriverHome() {
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [loadingPassengers, setLoadingPassengers] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [rideActive, setRideActive] = useState(false);
+  const [progress, setProgress] = useState<RotaProgressoDTO | null>(null);
+  const [progressBusy, setProgressBusy] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -46,9 +48,17 @@ export default function DriverHome() {
   const driverName = session.user?.name ?? 'Motorista';
   const vanInfo = [session.user?.modeloVan, session.user?.placaVan].filter(Boolean).join(' • ');
 
+  // O progresso vive no servidor (não é mais um GPS watch local), então
+  // sobrevive a recarregar o app — buscamos o estado atual ao montar.
   useEffect(() => {
+    let isMounted = true;
+    getRouteProgress()
+      .then((data) => {
+        if (isMounted) setProgress(data);
+      })
+      .catch(() => {});
     return () => {
-      void stopSharingLocation();
+      isMounted = false;
     };
   }, []);
 
@@ -59,14 +69,36 @@ export default function DriverHome() {
   }
 
   async function handleStartRide() {
-    if (rideActive) {
-      await stopSharingLocation();
-      setRideActive(false);
-      return;
+    setProgressBusy(true);
+    try {
+      setProgress(await startRoute());
+    } catch (err) {
+      Alert.alert('Não foi possível iniciar', err instanceof ApiError ? err.message : commonStrings.feedback.genericError);
+    } finally {
+      setProgressBusy(false);
     }
+  }
 
-    const started = await startSharingLocation((message) => Alert.alert('Não foi possível iniciar', message));
-    setRideActive(started);
+  async function handleAdvance() {
+    setProgressBusy(true);
+    try {
+      setProgress(await advanceRoute());
+    } catch (err) {
+      Alert.alert('Não foi possível avançar', err instanceof ApiError ? err.message : commonStrings.feedback.genericError);
+    } finally {
+      setProgressBusy(false);
+    }
+  }
+
+  async function handleEndRide() {
+    setProgressBusy(true);
+    try {
+      setProgress(await endRoute());
+    } catch (err) {
+      Alert.alert('Não foi possível encerrar', err instanceof ApiError ? err.message : commonStrings.feedback.genericError);
+    } finally {
+      setProgressBusy(false);
+    }
   }
 
   return (
@@ -118,19 +150,50 @@ export default function DriverHome() {
           <MaterialIcons name="edit" size={28} color={theme.colors.white} />
           <Text style={styles.actionText}>Editar corrida</Text>
         </Pressable>
-        <Pressable
-          onPress={handleStartRide}
-          accessibilityRole="button"
-          accessibilityLabel={rideActive ? 'Encerrar corrida' : 'Começar corrida'}
-          style={({ pressed }) => [pressed && styles.actionPressed]}>
-          <LinearGradient colors={theme.gradients.action} style={styles.actionButtonGradient}>
-            <View style={styles.actionButtonInner}>
-              <MaterialIcons name={rideActive ? 'stop-circle' : 'place'} size={28} color={theme.colors.white} />
-              <Text style={styles.actionText}>{rideActive ? 'encerrar corrida' : 'começar'}</Text>
-            </View>
-          </LinearGradient>
-        </Pressable>
+        {!progress?.ativo ? (
+          <Pressable
+            onPress={handleStartRide}
+            disabled={progressBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Começar corrida"
+            style={({ pressed }) => [pressed && styles.actionPressed]}>
+            <LinearGradient colors={theme.gradients.action} style={styles.actionButtonGradient}>
+              <View style={styles.actionButtonInner}>
+                <MaterialIcons name="place" size={28} color={theme.colors.white} />
+                <Text style={styles.actionText}>começar</Text>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        ) : null}
       </View>
+
+      {progress?.ativo ? (
+        <View style={styles.progressCard}>
+          <Text style={styles.progressLabel}>BUSCANDO AGORA</Text>
+          <Text style={styles.progressName}>{progress.alunoAtualNome ?? '—'}</Text>
+          <Text style={styles.progressCount}>
+            Parada {progress.ordemAtual} de {progress.totalParadas}
+          </Text>
+          <View style={styles.progressActions}>
+            <Pressable
+              style={({ pressed }) => [styles.progressButton, pressed && styles.actionPressed]}
+              onPress={handleAdvance}
+              disabled={progressBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Próxima parada">
+              <Text style={styles.progressButtonText}>Próxima parada</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.progressButtonOutline, pressed && styles.actionPressed]}
+              onPress={handleEndRide}
+              disabled={progressBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Encerrar corrida">
+              <Text style={styles.progressButtonOutlineText}>Encerrar</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       <Text style={styles.sectionTitle}>PASSAGEIROS</Text>
 
@@ -263,6 +326,58 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontWeight: theme.fontWeight.bold,
     fontSize: theme.fontSize.md,
+  },
+  progressCard: {
+    backgroundColor: theme.colors.surfaceInput,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
+    marginBottom: theme.spacing.xxl,
+    gap: theme.spacing.xs,
+  },
+  progressLabel: {
+    color: theme.colors.purpleAlt,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.bold,
+    letterSpacing: 1,
+  },
+  progressName: {
+    color: theme.colors.white,
+    fontSize: theme.fontSize.xl,
+    fontWeight: theme.fontWeight.black,
+  },
+  progressCount: {
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSize.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  progressActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  progressButton: {
+    flex: 1,
+    backgroundColor: theme.colors.purpleAlt,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.spacing.md,
+    alignItems: 'center',
+  },
+  progressButtonText: {
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.sm,
+  },
+  progressButtonOutline: {
+    flex: 1,
+    borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: theme.colors.borderMuted,
+    paddingVertical: theme.spacing.md,
+    alignItems: 'center',
+  },
+  progressButtonOutlineText: {
+    color: theme.colors.textSecondary,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.sm,
   },
   sectionTitle: {
     color: theme.colors.white,

@@ -14,8 +14,23 @@ import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { listAlunos, type Passenger } from '@/services/alunosService';
 import { listFaltas } from '@/services/faltaService';
-import type { FaltaDTO } from '@/types/api';
+import { getRouteProgress } from '@/services/routeProgressService';
+import type { FaltaDTO, RotaProgressoDTO } from '@/types/api';
 import type { AttendanceStatus } from '@/types';
+
+const ROUTE_PROGRESS_POLL_MS = 15000;
+
+function routeStatusMessage(progress: RotaProgressoDTO | null): string {
+  if (!progress || !progress.ativo) return 'Aguardando o motorista iniciar a corrida.';
+  if (progress.vocEhAtual) return 'O motorista está te buscando agora!';
+  if (progress.vocEhOProximo) return 'Você será o próximo a ser buscado!';
+  if (progress.suaOrdem == null) return 'Você ainda não está na rota do motorista.';
+  if (progress.ordemAtual != null && progress.suaOrdem > progress.ordemAtual) {
+    const faltam = progress.suaOrdem - progress.ordemAtual;
+    return `Faltam ${faltam} ${faltam === 1 ? 'parada' : 'paradas'} até chegar em você.`;
+  }
+  return 'Corrida em andamento.';
+}
 
 const MONTH_NAMES = [
   'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
@@ -38,6 +53,27 @@ export default function PassengerHome() {
   // antes de poder abrir o chat ou carregar as faltas. Pega o primeiro
   // filho se houver mais de um — não existe seletor ainda pra esse caso.
   const [meuAluno, setMeuAluno] = useState<Passenger | null>(null);
+  const [routeProgress, setRouteProgress] = useState<RotaProgressoDTO | null>(null);
+
+  // Sem WebSocket aqui — o backend resolve a posição do próprio filho na
+  // rota do motorista por trás de GET /api/rotas/progresso, então só
+  // buscamos de novo periodicamente enquanto a tela está aberta.
+  useEffect(() => {
+    let isMounted = true;
+    function fetchProgress() {
+      getRouteProgress()
+        .then((data) => {
+          if (isMounted) setRouteProgress(data);
+        })
+        .catch(() => {});
+    }
+    fetchProgress();
+    const interval = setInterval(fetchProgress, ROUTE_PROGRESS_POLL_MS);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -157,21 +193,15 @@ export default function PassengerHome() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SEU MOTORISTA</Text>
           <Avatar size={80} iconSize={48} style={styles.driverAvatar} />
-          <Text style={styles.driverStatus}>A caminho</Text>
 
-          <Pressable
-            style={styles.addressButton}
-            onPress={() =>
-              meuAluno?.motoristaId
-                ? router.push({ pathname: '/tracking', params: { motoristaId: String(meuAluno.motoristaId), contactName: 'Motorista' } })
-                : handleFeatureInDevelopment()
-            }
-            accessibilityRole="button"
-            accessibilityLabel="Ver localização no mapa">
-            <MaterialIcons name="place" size={20} color={theme.colors.white} />
-            <Text style={styles.addressText}>Rua Madalena</Text>
-            <MaterialIcons name="arrow-forward" size={20} color={theme.colors.white} />
-          </Pressable>
+          <View style={styles.statusCard}>
+            <MaterialIcons
+              name={routeProgress?.vocEhAtual ? 'directions-bus' : 'place'}
+              size={20}
+              color={theme.colors.white}
+            />
+            <Text style={styles.statusText}>{routeStatusMessage(routeProgress)}</Text>
+          </View>
         </View>
 
         <View style={styles.divider} />
@@ -277,12 +307,7 @@ const styles = StyleSheet.create({
   driverAvatar: {
     marginBottom: theme.spacing.sm + 2,
   },
-  driverStatus: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.fontSize.md,
-    marginBottom: theme.spacing.xxl,
-  },
-  addressButton: {
+  statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.magenta,
@@ -291,9 +316,8 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     gap: theme.spacing.sm,
     width: '100%',
-    justifyContent: 'space-between',
   },
-  addressText: {
+  statusText: {
     color: theme.colors.white,
     fontWeight: theme.fontWeight.bold,
     fontSize: theme.fontSize.base,

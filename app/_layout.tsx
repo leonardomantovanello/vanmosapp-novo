@@ -21,7 +21,6 @@ export default function RootLayout() {
           <Stack.Screen name="edit-route" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="chat" options={{ headerShown: false }} />
-          <Stack.Screen name="tracking" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

@@ -85,3 +85,31 @@ export interface FaltaDTO {
   registradoPorMotoristaId: number;
   criadoEm: string;
 }
+
+// Mirrors dto/RotaParadaDTO.java. GET/POST/DELETE /api/rotas + PUT
+// /api/rotas/reordenar — sempre a rota do motorista autenticado (ver
+// RotaController.validarMotorista, não aceita motoristaId por parâmetro).
+export interface RotaParadaDTO {
+  id: number;
+  alunoId: number;
+  nome: string;
+  enderecoEmbarque: string | null;
+  enderecoDesembarque: string | null;
+  escola: string | null;
+  turno: string | null;
+  ordem: number;
+}
+
+// Mirrors dto/RotaProgressoDTO.java. GET /api/rotas/progresso is
+// role-branched server-side: MOTORISTA gets alunoAtualNome filled in and
+// suaOrdem/vocEhAtual/vocEhOProximo null; RESPONSAVEL gets the opposite —
+// only their own child's position, never another student's name/address.
+export interface RotaProgressoDTO {
+  ativo: boolean;
+  ordemAtual: number | null;
+  totalParadas: number;
+  alunoAtualNome: string | null;
+  suaOrdem: number | null;
+  vocEhAtual: boolean | null;
+  vocEhOProximo: boolean | null;
+}
