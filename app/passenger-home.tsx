@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,11 +14,18 @@ import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { listAlunos, type Passenger } from '@/services/alunosService';
 import { listFaltas } from '@/services/faltaService';
+import {
+  configureNotificationChannel,
+  ensureNotificationPermission,
+  showLocalNotification,
+} from '@/services/notifications/localNotifications';
 import { getRouteProgress } from '@/services/routeProgressService';
 import type { FaltaDTO, RotaProgressoDTO } from '@/types/api';
 import type { AttendanceStatus } from '@/types';
 
 const ROUTE_PROGRESS_POLL_MS = 15000;
+const DRIVER_APPROACHING_TITLE = 'VanMos';
+const DRIVER_APPROACHING_BODY = 'Seu motorista está chegando. Prepare-se para o embarque.';
 
 function routeStatusMessage(progress: RotaProgressoDTO | null): string {
   if (!progress || !progress.ativo) return 'Aguardando o motorista iniciar a corrida.';
@@ -54,16 +61,36 @@ export default function PassengerHome() {
   // filho se houver mais de um — não existe seletor ainda pra esse caso.
   const [meuAluno, setMeuAluno] = useState<Passenger | null>(null);
   const [routeProgress, setRouteProgress] = useState<RotaProgressoDTO | null>(null);
+  // Guarda o vocEhOProximo do fetch anterior pra detectar a borda de subida
+  // (false -> true) e não notificar de novo a cada poll enquanto continuar
+  // "próximo". Começa em null pra não notificar no primeiro fetch da tela
+  // (evita disparo imediato ao abrir o app já com o motorista próximo).
+  const previousIsNextRef = useRef<boolean | null>(null);
 
   // Sem WebSocket aqui — o backend resolve a posição do próprio filho na
   // rota do motorista por trás de GET /api/rotas/progresso, então só
   // buscamos de novo periodicamente enquanto a tela está aberta.
+  //
+  // Notificação de aproximação: não há GPS no sistema (RotaProgressoService
+  // avança "manualmente" parada por parada), então "motorista chegando" é
+  // aproximado pelo motorista virar vocEhOProximo=true — a parada logo antes
+  // da sua. É uma notificação LOCAL (expo-notifications), não push remoto:
+  // só dispara com o app aberto/recente em segundo plano, não com o app
+  // totalmente encerrado — ver services/notifications/localNotifications.ts.
   useEffect(() => {
     let isMounted = true;
+    ensureNotificationPermission();
+    configureNotificationChannel();
+
     function fetchProgress() {
       getRouteProgress()
         .then((data) => {
-          if (isMounted) setRouteProgress(data);
+          if (!isMounted) return;
+          setRouteProgress(data);
+          if (previousIsNextRef.current === false && data.vocEhOProximo) {
+            showLocalNotification(DRIVER_APPROACHING_TITLE, DRIVER_APPROACHING_BODY);
+          }
+          previousIsNextRef.current = data.vocEhOProximo;
         })
         .catch(() => {});
     }
