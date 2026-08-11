@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,8 +12,20 @@ import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { ApiError } from '@/services/api/client';
 import { listAlunos, type Passenger } from '@/services/alunosService';
+import { listFaltasHoje } from '@/services/faltaService';
+import {
+  configureNotificationChannel,
+  ensureNotificationPermission,
+  showLocalNotification,
+} from '@/services/notifications/localNotifications';
 import { advanceRoute, endRoute, getRouteProgress, startRoute } from '@/services/routeProgressService';
-import type { RotaProgressoDTO } from '@/types/api';
+import type { FaltaDTO, RotaProgressoDTO } from '@/types/api';
+
+const FALTAS_POLL_MS = 15000;
+const FALTA_TITLE = 'VanMos';
+function faltaBody(nome: string): string {
+  return `${nome} faltou hoje. Removido da sua rota.`;
+}
 
 export default function DriverHome() {
   const router = useRouter();
@@ -25,6 +37,12 @@ export default function DriverHome() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [progress, setProgress] = useState<RotaProgressoDTO | null>(null);
   const [progressBusy, setProgressBusy] = useState(false);
+  const [faltasHoje, setFaltasHoje] = useState<FaltaDTO[]>([]);
+  // Guarda os ids ausentes conhecidos do poll anterior pra notificar só as
+  // ausências NOVAS. Começa null pra não disparar notificação em rajada no
+  // primeiro carregamento (mesmo padrão de previousIsNextRef em
+  // passenger-home.tsx).
+  const knownAusentesRef = useRef<Set<number> | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -61,6 +79,43 @@ export default function DriverHome() {
       isMounted = false;
     };
   }, []);
+
+  // Faltas de hoje na rota — não há push remoto no projeto, então quem
+  // avisa o motorista é o próprio app dele, com polling + notificação local
+  // (mesmo padrão já usado em passenger-home.tsx pro "motorista chegando").
+  // Depende de [passengers] porque o corpo da notificação usa o nome do
+  // aluno — passengers só muda uma vez, quando o listAlunos() inicial
+  // resolve, então isso não causa polling excessivo na prática.
+  useEffect(() => {
+    let isMounted = true;
+    ensureNotificationPermission();
+    configureNotificationChannel();
+
+    function fetchFaltasHoje() {
+      listFaltasHoje()
+        .then((data) => {
+          if (!isMounted) return;
+          setFaltasHoje(data);
+          const currentIds = new Set(data.map((f) => f.alunoId));
+          if (knownAusentesRef.current) {
+            for (const id of currentIds) {
+              if (!knownAusentesRef.current.has(id)) {
+                const nome = passengers.find((p) => Number(p.id) === id)?.name ?? 'Um aluno';
+                showLocalNotification(FALTA_TITLE, faltaBody(nome));
+              }
+            }
+          }
+          knownAusentesRef.current = currentIds;
+        })
+        .catch(() => {});
+    }
+    fetchFaltasHoje();
+    const interval = setInterval(fetchFaltasHoje, FALTAS_POLL_MS);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [passengers]);
 
   function handleLogout() {
     setMenuOpen(false);
@@ -226,13 +281,12 @@ export default function DriverHome() {
               <Avatar size={48} iconSize={28} />
               <Text style={styles.passengerName}>{item.name.toUpperCase()}</Text>
             </Pressable>
-            <Pressable
-              hitSlop={8}
-              onPress={() => router.push({ pathname: '/attendance', params: { contactName: item.name, alunoId: item.id } })}
-              accessibilityRole="button"
-              accessibilityLabel={`Ver faltas de ${item.name}`}>
-              <MaterialIcons name="event-busy" size={22} color={theme.colors.white} />
-            </Pressable>
+            {faltasHoje.some((f) => f.alunoId === Number(item.id)) ? (
+              <View style={styles.faltaBadge}>
+                <MaterialIcons name="event-busy" size={14} color={theme.colors.white} />
+                <Text style={styles.faltaBadgeText}>Faltou hoje</Text>
+              </View>
+            ) : null}
           </View>
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -430,5 +484,19 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.borderMuted,
     marginHorizontal: theme.spacing.lg,
+  },
+  faltaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.dangerStrong,
+    paddingHorizontal: theme.spacing.sm + 2,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.pill,
+  },
+  faltaBadgeText: {
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.xs,
   },
 });

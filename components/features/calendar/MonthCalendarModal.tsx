@@ -14,7 +14,7 @@ export interface MonthCalendarModalProps {
   weekDays: string[];
   absences: number;
   monthDays: ({ day: number; status?: AttendanceStatus } | null)[];
-  isPastOrToday: (day: number) => boolean;
+  isDayEnabled: (day: number) => boolean;
   onDayPress: (day: number) => void;
 }
 
@@ -26,7 +26,7 @@ export function MonthCalendarModal({
   weekDays,
   absences,
   monthDays,
-  isPastOrToday,
+  isDayEnabled,
   onDayPress,
 }: MonthCalendarModalProps) {
   return (
@@ -60,7 +60,7 @@ export function MonthCalendarModal({
               key={item.day}
               day={item.day}
               status={item.status}
-              enabled={isPastOrToday(item.day)}
+              enabled={isDayEnabled(item.day)}
               onPress={() => onDayPress(item.day)}
               size={44}
             />

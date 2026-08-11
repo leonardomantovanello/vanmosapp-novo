@@ -80,15 +80,16 @@ export interface MensagemDTO {
 }
 
 // Mirrors model/entity/Falta.java. GET /api/faltas/aluno/{alunoId} (read —
-// motorista or responsavel of that aluno) / POST+DELETE (write — motorista
-// only, see FaltaController). A day with no Falta record is presumed
-// present; there's no explicit "present" status stored.
+// motorista or responsavel of that aluno) / POST+DELETE (write — responsavel
+// only, see FaltaController). GET /api/faltas/hoje (motorista-only) returns
+// today's Falta rows for the driver's own students. A day with no Falta
+// record is presumed present; there's no explicit "present" status stored.
 export interface FaltaDTO {
   id: number;
   alunoId: number;
   data: string; // ISO date, "yyyy-MM-dd"
   justificativa: string | null;
-  registradoPorMotoristaId: number;
+  registradoPorId: number;
   criadoEm: string;
 }
 

@@ -9,11 +9,14 @@ import { DayCircle } from '@/components/features/calendar/DayCircle';
 import { MonthCalendarModal } from '@/components/features/calendar/MonthCalendarModal';
 import { SideMenu } from '@/components/features/home/SideMenu';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { ModalSheet } from '@/components/ui/ModalSheet';
+import { TextField } from '@/components/ui/TextField';
 import { commonStrings } from '@/constants/strings';
 import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
 import { listAlunos, type Passenger } from '@/services/alunosService';
-import { listFaltas } from '@/services/faltaService';
+import { desmarcarFalta, listFaltas, marcarFalta } from '@/services/faltaService';
 import {
   configureNotificationChannel,
   ensureNotificationPermission,
@@ -50,11 +53,16 @@ export default function PassengerHome() {
   const session = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  // Faltas vêm do backend e são só leitura aqui — quem marca/desmarca é o
-  // motorista (ver app/attendance.tsx e FaltaController, que recusa escrita
-  // de qualquer outra role no servidor, não só na UI). Um dia sem falta
+  // Quem marca/desmarca falta é o responsável, aqui mesmo (ver
+  // FaltaController, que recusa escrita de qualquer outra role no servidor,
+  // não só na UI). Marcar falta pra hoje remove a parada da rota do
+  // motorista (ver RotaProgressoService no backend) — só é permitido pra
+  // hoje/futuro, nunca pra um dia que já passou. Um dia sem falta
   // registrada é presumido presente.
   const [faltas, setFaltas] = useState<FaltaDTO[]>([]);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [justificativa, setJustificativa] = useState('');
+  const [savingFalta, setSavingFalta] = useState(false);
   // GET /api/alunos is filtered server-side to this responsável's own kids.
   // Chat/faltas são escopados por aluno, então precisamos de um aluno id
   // antes de poder abrir o chat ou carregar as faltas. Pega o primeiro
@@ -116,20 +124,14 @@ export default function PassengerHome() {
     };
   }, []);
 
-  useEffect(() => {
+  function loadFaltas() {
     if (!meuAluno) return;
-    let isMounted = true;
     listFaltas(Number(meuAluno.id))
-      .then((data) => {
-        if (isMounted) setFaltas(data);
-      })
-      .catch(() => {
-        if (isMounted) setFaltas([]);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [meuAluno]);
+      .then(setFaltas)
+      .catch(() => setFaltas([]));
+  }
+
+  useEffect(loadFaltas, [meuAluno]);
 
   const passengerName = session.user?.name ?? 'Passageiro';
   const today = new Date();
@@ -138,7 +140,10 @@ export default function PassengerHome() {
   const monthName = MONTH_NAMES[monthIndex];
   const todayDateOnly = new Date(year, monthIndex, today.getDate());
 
-  const isPastOrToday = (day: number) => new Date(year, monthIndex, day) <= todayDateOnly;
+  // Só é permitido marcar/desmarcar falta pra hoje ou dias futuros — um dia
+  // que já passou não pode mais ser removido da corrida (mesma regra
+  // aplicada no backend, ver FaltaController).
+  const isTodayOrFuture = (day: number) => new Date(year, monthIndex, day) >= todayDateOnly;
 
   // yyyy-MM-dd do mês/ano atual em exibição, pra casar com FaltaDTO.data.
   function isoDateFor(day: number): string {
@@ -150,12 +155,40 @@ export default function PassengerHome() {
   const faltaPorDia = new Map(faltas.map((falta) => [falta.data, falta]));
   const statusFor = (day: number): AttendanceStatus | undefined => (faltaPorDia.has(isoDateFor(day)) ? 'absent' : undefined);
 
-  // Somente leitura: mostra a justificativa que o motorista registrou, sem
-  // permitir marcar/desmarcar (isso é feito só no painel do motorista).
   function handleDayPress(day: number) {
-    const falta = faltaPorDia.get(isoDateFor(day));
-    if (!falta) return;
-    Alert.alert(`Falta em ${day}/${monthIndex + 1}`, falta.justificativa || 'Sem justificativa registrada.');
+    if (!isTodayOrFuture(day)) return;
+    setJustificativa(faltaPorDia.get(isoDateFor(day))?.justificativa ?? '');
+    setSelectedDay(day);
+  }
+
+  const jaTemFaltaNoDiaSelecionado = selectedDay ? faltaPorDia.has(isoDateFor(selectedDay)) : false;
+
+  async function handleSalvarFalta() {
+    if (!selectedDay || !meuAluno || !justificativa.trim()) return;
+    setSavingFalta(true);
+    try {
+      await marcarFalta(Number(meuAluno.id), isoDateFor(selectedDay), justificativa.trim());
+      setSelectedDay(null);
+      loadFaltas();
+    } catch (error) {
+      Alert.alert('Erro', error instanceof Error ? error.message : 'Não foi possível registrar a falta.');
+    } finally {
+      setSavingFalta(false);
+    }
+  }
+
+  async function handleRemoverFalta() {
+    if (!selectedDay || !meuAluno) return;
+    setSavingFalta(true);
+    try {
+      await desmarcarFalta(Number(meuAluno.id), isoDateFor(selectedDay));
+      setSelectedDay(null);
+      loadFaltas();
+    } catch (error) {
+      Alert.alert('Erro', error instanceof Error ? error.message : 'Não foi possível remover a falta.');
+    } finally {
+      setSavingFalta(false);
+    }
   }
 
   const absences = faltas.filter((falta) => falta.data.startsWith(`${year}-${String(monthIndex + 1).padStart(2, '0')}`)).length;
@@ -252,7 +285,7 @@ export default function PassengerHome() {
                 key={item.day}
                 day={item.day}
                 status={item.status}
-                enabled={isPastOrToday(item.day)}
+                enabled={isTodayOrFuture(item.day)}
                 onPress={() => handleDayPress(item.day)}
               />
             ))}
@@ -268,9 +301,33 @@ export default function PassengerHome() {
         weekDays={WEEK_DAY_LABELS}
         absences={absences}
         monthDays={monthDays}
-        isPastOrToday={isPastOrToday}
+        isDayEnabled={isTodayOrFuture}
         onDayPress={handleDayPress}
       />
+
+      <ModalSheet visible={selectedDay !== null} onClose={() => setSelectedDay(null)} closeAccessibilityLabel="Fechar">
+        <Text style={styles.modalTitle}>
+          {selectedDay ? `${selectedDay} de ${monthName.toLowerCase()}` : ''}
+        </Text>
+        <TextField
+          label="Justificativa da falta"
+          value={justificativa}
+          onChangeText={setJustificativa}
+          placeholder="Ex: vou viajar, aluno doente..."
+          containerStyle={styles.field}
+        />
+        <Button
+          title={jaTemFaltaNoDiaSelecionado ? 'Atualizar falta' : 'Marcar falta'}
+          onPress={handleSalvarFalta}
+          loading={savingFalta}
+          disabled={!justificativa.trim()}
+          fullWidth
+          style={styles.saveButton}
+        />
+        {jaTemFaltaNoDiaSelecionado ? (
+          <Button title="Remover falta (presente)" onPress={handleRemoverFalta} variant="outline" loading={savingFalta} fullWidth />
+        ) : null}
+      </ModalSheet>
 
       <View style={styles.bottomNav}>
         <View style={styles.navItem}>
@@ -402,5 +459,18 @@ const styles = StyleSheet.create({
   navItem: {
     flex: 1,
     alignItems: 'center',
+  },
+  modalTitle: {
+    color: theme.colors.white,
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.extraBold,
+    marginBottom: theme.spacing.lg,
+    textAlign: 'center',
+  },
+  field: {
+    marginBottom: theme.spacing.lg,
+  },
+  saveButton: {
+    marginBottom: theme.spacing.md,
   },
 });

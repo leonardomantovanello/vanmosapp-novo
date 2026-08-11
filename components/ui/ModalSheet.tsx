@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import { theme } from '@/constants/theme';
 
@@ -22,13 +22,32 @@ export function ModalSheet({
 }: ModalSheetProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={[styles.overlay, align === 'top-right' && styles.overlayTopRight]}
-        onPress={onClose}
-        accessibilityRole="button"
-        accessibilityLabel={closeAccessibilityLabel}>
-        <View style={[align === 'top-right' ? styles.panelTopRight : styles.panelCenter, contentStyle]}>{children}</View>
-      </Pressable>
+      {/* KeyboardAvoidingView: sem isso, o teclado empurrava/cortava o
+          painel centralizado quando o campo de texto ganhava foco (ver
+          TextField dentro do modal de marcar falta em passenger-home.tsx).
+          O Modal nativo do RN abre em sua própria hierarquia de janela, que
+          não recebe o ajuste automático de resize da tela principal, tanto
+          no iOS ("padding") quanto no Android ("height"). */}
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Pressable
+          style={[styles.overlay, align === 'top-right' ? styles.overlayTopRight : styles.overlayCenter]}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={closeAccessibilityLabel}>
+          {/* Pressable com onPress vazio (não Fragment/View comum): sem
+              isso, um toque em QUALQUER lugar do painel — inclusive no
+              campo de texto — "vazava" pro Pressable do overlay acima e
+              fechava o modal, porque um View simples não reivindica o
+              toque no sistema de responder do RN. */}
+          <Pressable
+            style={[align === 'top-right' ? styles.panelTopRight : styles.panelCenter, contentStyle]}
+            onPress={() => {}}>
+            {children}
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -37,6 +56,14 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: theme.colors.overlay,
+  },
+  // Centraliza o painel verticalmente — sem isso, o overlay (flex:1, sem
+  // justifyContent) deixava o painel colado no topo da tela, cortado
+  // quando o teclado abria. Não mexe em alignItems: o painel continua
+  // largo por causa do marginHorizontal em panelCenter (alignItems:stretch
+  // é o default), então essa mudança só afeta a posição vertical.
+  overlayCenter: {
+    justifyContent: 'center',
   },
   overlayTopRight: {
     backgroundColor: theme.colors.overlay,
