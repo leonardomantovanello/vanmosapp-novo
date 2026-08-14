@@ -23,7 +23,7 @@ export interface SessionUser {
   role: UserRole;
   accessToken: string;
   refreshToken: string;
-  // Only ever populated for role: 'driver' (MotoristasAdmin on the backend).
+  // Only ever populated for role: 'driver' (motorista table on the backend).
   placaVan?: string | null;
   modeloVan?: string | null;
 }

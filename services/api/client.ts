@@ -138,17 +138,9 @@ export function registerTokenHandlers(handlers: TokenHandlers): void {
 let refreshInFlight: Promise<string | null> | null = null;
 
 /**
- * POST /api/auth/refresh.
- *
- * BACKEND QUIRK: AuthController.refresh() looks the token's subject up via
- * `cadastroRepository.findByEmailIgnoreCase(subject)` unconditionally — it
- * only ever checks the Cadastro (RESPONSAVEL/passenger) table. There is no
- * equivalent lookup against MotoristasAdmin. So this refresh call always
- * succeeds for passenger sessions and always fails with 401 for driver
- * sessions, even with a perfectly valid, unexpired driver refresh token.
- * Drivers currently have no way to silently extend a session past the
- * 15-minute access token lifetime — see onSessionExpired below, which is
- * the fallback this forces for them.
+ * POST /api/auth/refresh. Tries the passageiros table first, then motorista
+ * (see AuthController.refresh on the backend) — works the same for both
+ * passenger and driver sessions.
  */
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = tokenHandlers?.getRefreshToken();

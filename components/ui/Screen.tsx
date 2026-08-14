@@ -20,6 +20,11 @@ export interface ScreenProps {
   edges?: Edge[];
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  // Renderizado fora do ScrollView, como pano de fundo fixo — pensado pra
+  // FloatingCircle/etc, que precisam de posicionamento absoluto sem rolar
+  // junto com o conteúdo (um ScrollView recorta filhos posicionados fora
+  // dos próprios limites, ver a mesma lição em app/profile.tsx).
+  decorations?: ReactNode;
 }
 
 export function Screen({
@@ -30,6 +35,7 @@ export function Screen({
   edges = ['top', 'bottom', 'left', 'right'],
   style,
   contentContainerStyle,
+  decorations,
 }: ScreenProps) {
   const body = scroll ? (
     <ScrollView
@@ -45,6 +51,7 @@ export function Screen({
 
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor }, style]} edges={edges}>
+      {decorations}
       {keyboardAvoiding ? (
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {body}

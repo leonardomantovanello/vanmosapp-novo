@@ -4,19 +4,24 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 import { DayCircle } from '@/components/features/calendar/DayCircle';
 import { MonthCalendarModal } from '@/components/features/calendar/MonthCalendarModal';
 import { SideMenu } from '@/components/features/home/SideMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { FloatingCircle, GLOW_COLORS } from '@/components/ui/FloatingCircle';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { TextField } from '@/components/ui/TextField';
 import { commonStrings } from '@/constants/strings';
 import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
+import { usePulse } from '@/hooks/use-pulse';
 import { listAlunos, type Passenger } from '@/services/alunosService';
 import { desmarcarFalta, listFaltas, marcarFalta } from '@/services/faltaService';
+import { listMotoristasPublico } from '@/services/motoristasService';
+import { getProfile } from '@/services/profileService';
 import {
   configureNotificationChannel,
   ensureNotificationPermission,
@@ -51,6 +56,11 @@ const WEEK_DAY_LABELS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 export default function PassengerHome() {
   const router = useRouter();
   const session = useSession();
+  const statusGlow = usePulse(2400);
+  const statusGlowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: 0.3 + statusGlow.value * 0.35,
+    shadowRadius: 10 + statusGlow.value * 12,
+  }));
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   // Quem marca/desmarca falta é o responsável, aqui mesmo (ver
@@ -68,6 +78,11 @@ export default function PassengerHome() {
   // antes de poder abrir o chat ou carregar as faltas. Pega o primeiro
   // filho se houver mais de um — não existe seletor ainda pra esse caso.
   const [meuAluno, setMeuAluno] = useState<Passenger | null>(null);
+  const [driverAvatarUri, setDriverAvatarUri] = useState<string | null>(null);
+  // SessionUser não carrega avatarUri (login só devolve id/nome/email/tipo
+  // — ver SessionContext.tsx), então busca o perfil completo à parte pra
+  // exibir a foto de verdade em vez do ícone genérico sempre.
+  const [myAvatarUri, setMyAvatarUri] = useState<string | null>(null);
   const [routeProgress, setRouteProgress] = useState<RotaProgressoDTO | null>(null);
   // Guarda o vocEhOProximo do fetch anterior pra detectar a borda de subida
   // (false -> true) e não notificar de novo a cada poll enquanto continuar
@@ -123,6 +138,44 @@ export default function PassengerHome() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const userId = session.user?.id;
+    if (!userId) return;
+    let isMounted = true;
+    getProfile({ id: userId, role: 'passenger' })
+      .then((profile) => {
+        if (isMounted) setMyAvatarUri(profile.avatarUri);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [session.user?.id]);
+
+  // Busca a foto do motorista atribuído ao aluno via GET /api/motoristas/publico
+  // (a única rota que expõe avatar sem exigir ownership) e acha a que bate
+  // com o motoristaId do aluno. Sem foto cadastrada ou motorista ainda não
+  // atribuído, o Avatar cai no ícone placeholder normalmente.
+  useEffect(() => {
+    if (!meuAluno?.motoristaId) {
+      setDriverAvatarUri(null);
+      return;
+    }
+    let isMounted = true;
+    listMotoristasPublico()
+      .then((motoristas) => {
+        if (!isMounted) return;
+        const meuMotorista = motoristas.find((m) => m.id === meuAluno.motoristaId);
+        setDriverAvatarUri(meuMotorista?.avatarBase64 ?? null);
+      })
+      .catch(() => {
+        if (isMounted) setDriverAvatarUri(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [meuAluno?.motoristaId]);
 
   function loadFaltas() {
     if (!meuAluno) return;
@@ -218,6 +271,9 @@ export default function PassengerHome() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+      <FloatingCircle colors={GLOW_COLORS.violet} style={styles.circleTopRight} driftX={16} driftY={12} duration={5600} />
+      <FloatingCircle colors={GLOW_COLORS.pink} style={styles.circleBottomLeft} driftX={-14} driftY={16} duration={6800} />
+
       <SideMenu
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
@@ -238,7 +294,7 @@ export default function PassengerHome() {
             <MaterialIcons name="menu" size={28} color={theme.colors.white} />
           </Pressable>
           <View style={styles.headerCenter}>
-            <Avatar size={60} iconSize={34} backgroundColor="rgba(255,255,255,0.3)" />
+            <Avatar uri={myAvatarUri} size={60} iconSize={34} backgroundColor="rgba(255,255,255,0.3)" />
             <Text style={styles.greeting}>Olá, {passengerName}!</Text>
           </View>
           <Pressable
@@ -252,19 +308,21 @@ export default function PassengerHome() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SEU MOTORISTA</Text>
-          <Avatar size={80} iconSize={48} style={styles.driverAvatar} />
-
-          <View style={styles.statusCard}>
-            <MaterialIcons
-              name={routeProgress?.vocEhAtual ? 'directions-bus' : 'place'}
-              size={20}
-              color={theme.colors.white}
-            />
-            <Text style={styles.statusText}>{routeStatusMessage(routeProgress)}</Text>
+          <View style={styles.avatarGlow}>
+            <Avatar uri={driverAvatarUri} size={80} iconSize={48} />
           </View>
-        </View>
 
-        <View style={styles.divider} />
+          <Animated.View style={[styles.statusCardShadow, statusGlowStyle]}>
+            <View style={styles.statusCard}>
+              <MaterialIcons
+                name={routeProgress?.vocEhAtual ? 'directions-bus' : 'place'}
+                size={20}
+                color={theme.colors.white}
+              />
+              <Text style={styles.statusText}>{routeStatusMessage(routeProgress)}</Text>
+            </View>
+          </Animated.View>
+        </View>
 
         <View style={styles.section}>
           <MaterialIcons name="schedule" size={28} color={theme.colors.textSecondary} style={styles.scheduleIcon} />
@@ -336,7 +394,7 @@ export default function PassengerHome() {
         <Pressable style={styles.navItem} onPress={handleFeatureInDevelopment} accessibilityRole="button" accessibilityLabel="Horários">
           <MaterialIcons name="schedule" size={26} color={theme.colors.textFaint} />
         </Pressable>
-        <Pressable style={styles.navItem} onPress={handleFeatureInDevelopment} accessibilityRole="button" accessibilityLabel="Locais">
+        <Pressable style={styles.navItem} onPress={() => router.push('/locations')} accessibilityRole="button" accessibilityLabel="Locais">
           <MaterialIcons name="place" size={26} color={theme.colors.textFaint} />
         </Pressable>
         <Pressable
@@ -360,6 +418,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.backgroundAlt,
   },
+  circleTopRight: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    top: 60,
+    right: -40,
+    overflow: 'hidden',
+  },
+  circleBottomLeft: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    bottom: 100,
+    left: -40,
+    overflow: 'hidden',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -380,6 +456,12 @@ const styles = StyleSheet.create({
   section: {
     padding: theme.spacing.xxl,
     alignItems: 'center',
+    marginHorizontal: theme.spacing.xl,
+    marginTop: theme.spacing.lg,
+    backgroundColor: theme.colors.surfaceCard,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(204,68,204,0.15)',
   },
   sectionTitle: {
     color: theme.colors.white,
@@ -388,8 +470,22 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: theme.spacing.lg,
   },
-  driverAvatar: {
+  avatarGlow: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: 'rgba(170,68,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(170,68,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: theme.spacing.sm + 2,
+  },
+  statusCardShadow: {
+    width: '100%',
+    shadowColor: theme.colors.magenta,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   statusCard: {
     flexDirection: 'row',
@@ -406,11 +502,6 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     fontSize: theme.fontSize.base,
     flex: 1,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.borderMuted,
-    marginHorizontal: theme.spacing.xxl,
   },
   scheduleIcon: {
     alignSelf: 'center',

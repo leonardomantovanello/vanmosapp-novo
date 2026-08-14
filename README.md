@@ -7,8 +7,10 @@ edição de rota. O visual segue um tema escuro com gradiente roxo/rosa.
 O cadastro de usuários (e o cadastro de alunos pelo motorista) acontece no site — o app
 foca apenas no uso do serviço por quem já tem conta.
 
-> Estado atual: protótipo funcional com dados **mockados** (em memória). Não há backend
-> nem autenticação real — veja [Limitações atuais](#limitações-atuais).
+> Estado atual: conectado à API real (Spring Boot, `vanmosapi`) — autenticação por JWT,
+> alunos, faltas, rota/progresso da corrida, perfil, mensagens em tempo real (STOMP) e
+> ajustes já vêm do backend. Só `services/notificationService.ts` ainda não tem um
+> endpoint real por trás (retorna lista vazia) — veja [Limitações atuais](#limitações-atuais).
 
 ## Requisitos
 
@@ -56,11 +58,12 @@ components/
 
 constants/                Tema único: cores, espaçamentos, tipografia e strings
                           compartilhadas (theme.ts agrega tudo)
-context/                  SessionContext: sessão do usuário em memória (nome, papel, logout)
-services/                 Camada de acesso a dados mockada (perfil, rotas, mensagens,
-                          notificações, consulta de CEP) — isolada das telas para
-                          facilitar a troca futura por chamadas de API reais
-mocks/                    Dados temporários usados pelos services
+context/                  SessionContext: sessão do usuário persistida via SecureStore
+                          (token JWT, papel, logout)
+services/                 Camada de acesso à API real (vanmosapi) — auth, alunos, faltas,
+                          rota/progresso, perfil, mensagens (STOMP), ajustes, consulta de
+                          CEP. Só notificationService.ts ainda não tem endpoint real (ver
+                          Limitações atuais).
 types/                    Tipos compartilhados (User, RouteStop, ChatMessage,
                           AppNotification, Attendance)
 utils/                    Validação, máscara (CEP/telefone/CNH) e formatação
@@ -68,23 +71,20 @@ utils/                    Validação, máscara (CEP/telefone/CNH) e formataçã
 
 ## Limitações atuais
 
-- **Sem backend real**: todos os dados (perfil, rotas, mensagens, notificações) vivem em
-  memória através da camada `services/` e são perdidos ao reiniciar o app.
-- **Sem autenticação real**: o login apenas valida o formulário e abre uma sessão local
-  (`context/SessionContext.tsx`); nenhuma senha é persistida ou enviada a um servidor.
-  O cadastro de contas acontece fora do app (no site).
-- **Consulta de CEP real**: `services/cepService.ts` consulta a API pública do ViaCEP
-  (único acesso de rede do app) e trata falha de rede, timeout e CEP não encontrado.
-- Botões de funcionalidades ainda não implementadas (ex.: login social, iniciar corrida,
-  anexar arquivo no chat, abas "Horários"/"Locais") exibem um aviso de
+- **Notificações**: `services/notificationService.ts` retorna lista vazia — o backend
+  (`vanmosapi`) ainda não expõe um endpoint de notificações. A tela (`app/notifications.tsx`)
+  já trata isso com um estado vazio, sem dado inventado.
+- **Cadastro de contas**: acontece fora do app (no site) — o app foca apenas no uso do
+  serviço por quem já tem conta.
+- Botões de funcionalidades ainda não implementadas (ex.: login social, anexar
+  arquivo/emoji/câmera no chat, abas "Horários"/"Locais") exibem um aviso de
   "Funcionalidade em desenvolvimento" em vez de ficar sem resposta.
 - Não há suíte de testes automatizados configurada no projeto (sem `jest`/`jest-expo`
   instalado). As funções de `utils/validation.ts` e `utils/masks.ts` são puras e foram
   escritas para serem facilmente testáveis assim que um test runner for adicionado.
 
-## Próximos passos sugeridos (integração futura)
+## Próximos passos sugeridos
 
-- Substituir as funções de `services/*` por chamadas HTTP a uma API real, mantendo as
-  mesmas assinaturas usadas pelas telas.
-- Adicionar persistência de sessão (ex.: `expo-secure-store`) e autenticação real.
+- Adicionar um endpoint real de notificações no backend e trocar
+  `services/notificationService.ts` pra consumi-lo.
 - Adicionar um test runner (ex.: `jest-expo`) e cobrir `utils/` e componentes críticos.

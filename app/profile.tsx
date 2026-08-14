@@ -123,13 +123,20 @@ export default function Profile() {
         backAccessibilityLabel="Voltar"
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.avatarSection}>
-          <AvatarPicker uri={avatarUri} onChange={setAvatarUri} />
-          <Text style={styles.profileName}>{profileName}</Text>
-          <Text style={styles.profileRole}>{role === 'driver' ? 'MOTORISTA' : 'PASSAGEIRO'}</Text>
-        </View>
+      {/*
+        Fora do ScrollView de propósito: o overlap com o Header depende do
+        marginTop negativo abaixo, e um ScrollView recorta (clip) qualquer
+        conteúdo do seu próprio conjunto que ultrapasse os limites da área
+        rolável — cortando bem a fatia de cima do avatar que deveria ficar
+        por cima do Header, como se a barra "comesse" a bolha.
+      */}
+      <View style={styles.avatarSection}>
+        <AvatarPicker uri={avatarUri} onChange={setAvatarUri} />
+        <Text style={styles.profileName}>{profileName}</Text>
+        <Text style={styles.profileRole}>{role === 'driver' ? 'MOTORISTA' : 'PASSAGEIRO'}</Text>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           <TextField
             label="Nome completo"

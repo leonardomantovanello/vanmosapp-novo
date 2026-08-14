@@ -1,5 +1,5 @@
 import { authorizedRequest } from '@/services/api/client';
-import type { MotoristaAdminDTO, PassageiroDTO } from '@/types/api';
+import type { MotoristaDTO, PassageiroDTO } from '@/types/api';
 import type { User, UserProfileInput, UserRole } from '@/types';
 
 interface ProfileRef {
@@ -23,15 +23,15 @@ function fromPassageiro(dto: PassageiroDTO): User {
   };
 }
 
-function fromMotorista(dto: MotoristaAdminDTO): User {
+function fromMotorista(dto: MotoristaDTO): User {
   return {
     id: String(dto.id),
-    name: dto.nomeCompleto,
-    email: dto.gmail,
+    name: dto.nome,
+    email: dto.email,
     role: 'driver',
     cpf: dto.cpf,
-    idade: null,
-    genero: null,
+    idade: dto.idade,
+    genero: dto.genero,
     cnh: dto.cnh,
     modeloVan: dto.modeloVan,
     placaVan: dto.placaVan,
@@ -41,25 +41,25 @@ function fromMotorista(dto: MotoristaAdminDTO): User {
 
 export async function getProfile({ id, role }: ProfileRef): Promise<User> {
   if (role === 'driver') {
-    return fromMotorista(await authorizedRequest<MotoristaAdminDTO>(`/motoristas-admin/${id}`));
+    return fromMotorista(await authorizedRequest<MotoristaDTO>(`/motoristas/${id}`));
   }
   return fromPassageiro(await authorizedRequest<PassageiroDTO>(`/passageiros/${id}`));
 }
 
-// PUT /api/passageiros/{id} and PUT /api/motoristas-admin/{id} are partial
-// updates server-side (see PassageiroService/MotoristasAdminService) —
-// blank text fields are left unchanged, but avatarBase64 always overwrites
-// (null there means "no photo", a real state, not "field not sent" — see
-// the comment on existente.setAvatarBase64 in both services). Never send
-// `senha` here: neither endpoint needs it for a profile edit, and the
-// dedicated password-change flow lives in services/settingsService.ts.
+// PUT /api/passageiros/{id} and PUT /api/motoristas/{id} are partial
+// updates server-side (see PassageiroService/MotoristaService) — blank text
+// fields are left unchanged, but avatarBase64 always overwrites (null there
+// means "no photo", a real state, not "field not sent" — see the comment on
+// existente.setAvatarBase64 in both services). Never send `senha` here:
+// neither endpoint needs it for a profile edit, and the dedicated
+// password-change flow lives in services/settingsService.ts.
 export async function updateProfile(input: UserProfileInput, { id, role }: ProfileRef): Promise<User> {
   if (role === 'driver') {
-    const dto = await authorizedRequest<MotoristaAdminDTO>(`/motoristas-admin/${id}`, {
+    const dto = await authorizedRequest<MotoristaDTO>(`/motoristas/${id}`, {
       method: 'PUT',
       body: {
-        nomeCompleto: input.name,
-        gmail: input.email,
+        nome: input.name,
+        email: input.email,
         cpf: input.cpf,
         cnh: input.cnh,
         modeloVan: input.modeloVan,

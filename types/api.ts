@@ -37,18 +37,29 @@ export interface PassageiroDTO {
   avatarBase64: string | null;
 }
 
-// Mirrors model/entity/MotoristasAdmin.java (driver profile + login).
-// `senha` is intentionally omitted for the same reason as above.
-export interface MotoristaAdminDTO {
+// Mirrors model/entity/Motorista.java (driver profile + login — replaced
+// the old MotoristasAdmin table, see V14/V17/V18 migrations). `senha` is
+// intentionally omitted for the same reason as PassageiroDTO above.
+export interface MotoristaDTO {
   id: number;
-  cnh: string | null;
+  nome: string;
   cpf: string | null;
-  gmail: string;
-  modeloVan: string | null;
-  nomeCompleto: string;
-  placaVan: string | null;
+  cnh: string | null;
+  idade: number | null;
+  genero: string | null;
+  telefone: string | null;
+  email: string;
   ativo: boolean;
+  aceitoTermos: boolean;
+  rg: string | null;
+  rgDocumentoBase64: string | null;
+  cnhDocumentoBase64: string | null;
+  statusCadastro: 'PENDENTE' | 'APROVADO' | 'REPROVADO' | null;
+  motivoReprovacao: string | null;
+  criadoEm: string;
   avatarBase64: string | null;
+  modeloVan: string | null;
+  placaVan: string | null;
 }
 
 // Mirrors model/entity/Aluno.java. GET /api/alunos is filtered server-side:
@@ -91,6 +102,19 @@ export interface FaltaDTO {
   justificativa: string | null;
   registradoPorId: number;
   criadoEm: string;
+}
+
+// Mirrors dto/MotoristaPublicoDTO.java. GET /api/motoristas/publico — no
+// auth required, so it's the only way a passenger's app can get their
+// driver's photo (GET /api/motoristas/{id} is ownership-restricted to the
+// driver themself/ADMIN). Only active drivers are included server-side.
+export interface MotoristaPublicoDTO {
+  id: number;
+  nomeCompleto: string;
+  modeloVan: string | null;
+  placaVan: string | null;
+  ativo: boolean;
+  avatarBase64: string | null;
 }
 
 // Mirrors dto/RotaParadaDTO.java. GET/POST/DELETE /api/rotas + PUT

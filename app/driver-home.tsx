@@ -2,17 +2,22 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { FloatingCircle, GLOW_COLORS } from '@/components/ui/FloatingCircle';
 import { SideMenu } from '@/components/features/home/SideMenu';
+import { TextField } from '@/components/ui/TextField';
 import { commonStrings } from '@/constants/strings';
 import { theme } from '@/constants/theme';
 import { useSession } from '@/context/SessionContext';
+import { usePulse } from '@/hooks/use-pulse';
 import { ApiError } from '@/services/api/client';
 import { listAlunos, type Passenger } from '@/services/alunosService';
 import { listFaltasHoje } from '@/services/faltaService';
+import { getProfile } from '@/services/profileService';
 import {
   configureNotificationChannel,
   ensureNotificationPermission,
@@ -30,6 +35,11 @@ function faltaBody(nome: string): string {
 export default function DriverHome() {
   const router = useRouter();
   const session = useSession();
+  const startGlow = usePulse(2200);
+  const startGlowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: 0.35 + startGlow.value * 0.35,
+    shadowRadius: 14 + startGlow.value * 14,
+  }));
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [passengers, setPassengers] = useState<Passenger[]>([]);
@@ -38,6 +48,10 @@ export default function DriverHome() {
   const [progress, setProgress] = useState<RotaProgressoDTO | null>(null);
   const [progressBusy, setProgressBusy] = useState(false);
   const [faltasHoje, setFaltasHoje] = useState<FaltaDTO[]>([]);
+  // SessionUser não carrega avatarUri (login só devolve id/nome/email/tipo
+  // — ver SessionContext.tsx), então busca o perfil completo à parte pra
+  // exibir a foto de verdade em vez do ícone genérico sempre.
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   // Guarda os ids ausentes conhecidos do poll anterior pra notificar só as
   // ausências NOVAS. Começa null pra não disparar notificação em rajada no
   // primeiro carregamento (mesmo padrão de previousIsNextRef em
@@ -65,6 +79,20 @@ export default function DriverHome() {
   const filtered = passengers.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const driverName = session.user?.name ?? 'Motorista';
   const vanInfo = [session.user?.modeloVan, session.user?.placaVan].filter(Boolean).join(' • ');
+
+  useEffect(() => {
+    const userId = session.user?.id;
+    if (!userId) return;
+    let isMounted = true;
+    getProfile({ id: userId, role: 'driver' })
+      .then((profile) => {
+        if (isMounted) setAvatarUri(profile.avatarUri);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [session.user?.id]);
 
   // O progresso vive no servidor (não é mais um GPS watch local), então
   // sobrevive a recarregar o app — buscamos o estado atual ao montar.
@@ -158,6 +186,9 @@ export default function DriverHome() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+      <FloatingCircle colors={GLOW_COLORS.purple} style={styles.circleTopRight} driftX={16} driftY={12} duration={5800} />
+      <FloatingCircle colors={GLOW_COLORS.pink} style={styles.circleBottomLeft} driftX={-14} driftY={16} duration={7000} />
+
       <SideMenu
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
@@ -188,7 +219,9 @@ export default function DriverHome() {
       </View>
 
       <View style={styles.greetingRow}>
-        <Avatar size={64} iconSize={40} />
+        <View style={styles.avatarGlow}>
+          <Avatar uri={avatarUri} size={64} iconSize={40} />
+        </View>
         <View>
           <Text style={styles.greetingTop}>BOM DIA</Text>
           <Text style={styles.greetingName}>{driverName.toUpperCase()}</Text>
@@ -206,19 +239,21 @@ export default function DriverHome() {
           <Text style={styles.actionText}>Editar corrida</Text>
         </Pressable>
         {!progress?.ativo ? (
-          <Pressable
-            onPress={handleStartRide}
-            disabled={progressBusy}
-            accessibilityRole="button"
-            accessibilityLabel="Começar corrida"
-            style={({ pressed }) => [pressed && styles.actionPressed]}>
-            <LinearGradient colors={theme.gradients.action} style={styles.actionButtonGradient}>
-              <View style={styles.actionButtonInner}>
-                <MaterialIcons name="place" size={28} color={theme.colors.white} />
-                <Text style={styles.actionText}>começar</Text>
-              </View>
-            </LinearGradient>
-          </Pressable>
+          <Animated.View style={[styles.startGlow, startGlowStyle]}>
+            <Pressable
+              onPress={handleStartRide}
+              disabled={progressBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Começar corrida"
+              style={({ pressed }) => [pressed && styles.actionPressed]}>
+              <LinearGradient colors={theme.gradients.action} style={styles.actionButtonGradient}>
+                <View style={styles.actionButtonInner}>
+                  <MaterialIcons name="place" size={28} color={theme.colors.white} />
+                  <Text style={styles.actionText}>começar</Text>
+                </View>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
         ) : null}
       </View>
 
@@ -252,17 +287,15 @@ export default function DriverHome() {
 
       <Text style={styles.sectionTitle}>PASSAGEIROS</Text>
 
-      <View style={styles.searchRow}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Buscar..."
-          placeholderTextColor={theme.colors.textMuted}
-          value={search}
-          onChangeText={setSearch}
-          accessibilityLabel="Buscar passageiro"
-        />
-        <MaterialIcons name="search" size={22} color={theme.colors.textMuted} />
-      </View>
+      <TextField
+        variant="filled"
+        icon="search"
+        placeholder="Buscar..."
+        value={search}
+        onChangeText={setSearch}
+        accessibilityLabel="Buscar passageiro"
+        containerStyle={styles.searchField}
+      />
 
       {loadError ? <Text style={styles.errorText}>{loadError}</Text> : null}
       {loadingPassengers ? <Text style={styles.hintText}>{commonStrings.feedback.loading}</Text> : null}
@@ -302,6 +335,24 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.xl,
     paddingHorizontal: theme.spacing.xl,
   },
+  circleTopRight: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    top: -20,
+    right: -30,
+    overflow: 'hidden',
+  },
+  circleBottomLeft: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    bottom: -20,
+    left: -40,
+    overflow: 'hidden',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -325,6 +376,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.lg,
     marginBottom: theme.spacing.xxl + theme.spacing.xs,
+  },
+  avatarGlow: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(170,68,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(170,68,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   greetingTop: {
     color: theme.colors.textSecondary,
@@ -365,8 +426,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.surfaceInput,
     borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(204,68,204,0.15)',
     padding: theme.spacing.xl,
     gap: theme.spacing.sm,
+  },
+  startGlow: {
+    shadowColor: theme.colors.magenta,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   actionButtonGradient: {
     flex: 1,
@@ -384,6 +452,8 @@ const styles = StyleSheet.create({
   progressCard: {
     backgroundColor: theme.colors.surfaceInput,
     borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(204,68,204,0.2)',
     padding: theme.spacing.xl,
     marginBottom: theme.spacing.xxl,
     gap: theme.spacing.xs,
@@ -440,23 +510,14 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: theme.spacing.md,
   },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceCard,
-    borderRadius: theme.radius.xl,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+  searchField: {
     marginBottom: theme.spacing.lg,
-  },
-  searchInput: {
-    flex: 1,
-    color: theme.colors.white,
-    fontSize: theme.fontSize.base,
   },
   list: {
     backgroundColor: theme.colors.surfaceCard,
     borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(204,68,204,0.15)',
   },
   passengerItem: {
     flexDirection: 'row',

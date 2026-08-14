@@ -28,6 +28,9 @@ export interface TextFieldProps {
   maxLength?: number;
   variant?: 'filled' | 'underline';
   editable?: boolean;
+  // Nome de um ícone MaterialIcons pra mostrar à esquerda do campo (ex.:
+  // "mail-outline", "lock-outline") — puramente decorativo, opcional.
+  icon?: keyof typeof MaterialIcons.glyphMap;
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<TextStyle>;
   accessibilityLabel?: string;
@@ -46,6 +49,7 @@ export function TextField({
   maxLength,
   variant = 'filled',
   editable = true,
+  icon,
   containerStyle,
   inputStyle,
   accessibilityLabel,
@@ -56,7 +60,10 @@ export function TextField({
   return (
     <View style={containerStyle}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, variant === 'filled' && styles.inputRowFilled]}>
+        {icon ? (
+          <MaterialIcons name={icon} size={20} color={theme.colors.textMuted} style={styles.leftIcon} />
+        ) : null}
         <TextInput
           style={[
             styles.input,
@@ -107,6 +114,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  inputRowFilled: {
+    backgroundColor: theme.colors.surfaceInput,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  leftIcon: {
+    marginRight: theme.spacing.sm,
+  },
   input: {
     flex: 1,
     color: theme.colors.textPrimary,
@@ -114,9 +129,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   inputFilled: {
-    backgroundColor: theme.colors.surfaceInput,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
     fontSize: theme.fontSize.base,
   },
@@ -129,8 +141,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   toggleButton: {
-    marginLeft: -36,
     padding: theme.spacing.sm,
+    marginRight: -theme.spacing.sm,
   },
   error: {
     color: theme.colors.danger,
