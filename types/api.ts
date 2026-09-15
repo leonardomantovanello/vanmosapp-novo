@@ -81,12 +81,18 @@ export interface AlunoDTO {
 // Mirrors model/entity/Mensagem.java. GET/POST /api/mensagens/aluno/{alunoId}
 // — one conversation per aluno, shared by that aluno's motorista and
 // responsavel (see MensagemController for the ownership check).
+// texto is null for AUDIO/ARQUIVO messages that carry no caption; anexoBase64
+// is a full data URI (e.g. "data:image/jpeg;base64,...") — same convention
+// as avatarBase64, stored as-is with no separate file storage/CDN.
 export interface MensagemDTO {
   id: number;
   alunoId: number;
   remetenteTipo: 'MOTORISTA' | 'RESPONSAVEL' | 'ADMIN';
   remetenteId: number;
-  texto: string;
+  texto: string | null;
+  tipo: 'TEXTO' | 'AUDIO' | 'ARQUIVO';
+  anexoBase64: string | null;
+  anexoNome: string | null;
   criadoEm: string;
 }
 

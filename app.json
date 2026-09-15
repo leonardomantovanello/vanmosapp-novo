@@ -47,10 +47,24 @@
       "expo-secure-store",
       "expo-font",
       "expo-notifications",
+      "expo-asset",
       [
         "expo-location",
         {
           "locationWhenInUsePermission": "O VanMos usa sua localização para compartilhar em tempo real a posição da van durante a corrida."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "O VanMos usa o microfone para gravar mensagens de áudio no chat."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O VanMos usa suas fotos para definir a imagem de perfil e enviar fotos no chat.",
+          "cameraPermission": "O VanMos usa a câmera para tirar fotos e enviar no chat."
         }
       ]
     ],
