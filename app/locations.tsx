@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FloatingCircle, GLOW_COLORS } from '@/components/ui/FloatingCircle';
+import { GlowingCard } from '@/components/ui/GlowingCard';
 import { Header } from '@/components/ui/Header';
 import { Screen } from '@/components/ui/Screen';
 import { theme } from '@/constants/theme';
@@ -67,7 +68,12 @@ export default function Locations() {
       <Header variant="gradient" gradientColors={theme.gradients.header} title="LOCAIS" onBack={() => router.back()} />
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>SEUS PONTOS</Text>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionIconBadge}>
+            <MaterialIcons name="place" size={18} color={theme.colors.purpleLight} />
+          </View>
+          <Text style={styles.sectionTitle}>SEUS PONTOS</Text>
+        </View>
         {meuAluno?.enderecoEmbarque || meuAluno?.enderecoDesembarque || meuAluno?.escola ? (
           <View style={styles.pointsCard}>
             {meuAluno?.enderecoEmbarque ? (
@@ -104,10 +110,15 @@ export default function Locations() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>PROGRESSO DA ROTA</Text>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionIconBadge}>
+            <MaterialIcons name="route" size={18} color={theme.colors.purpleLight} />
+          </View>
+          <Text style={styles.sectionTitle}>PROGRESSO DA ROTA</Text>
+        </View>
 
         {loading ? null : (
-          <View style={styles.progressCard}>
+          <GlowingCard cardStyle={styles.progressCard}>
             {paradas.length === 0 ? (
               <EmptyState
                 icon="route"
@@ -116,7 +127,7 @@ export default function Locations() {
             ) : (
               <View style={styles.timeline}>
                 {paradas.map((parada, index) => (
-                  <View key={parada.ordem} style={styles.timelineRow}>
+                  <View key={parada.ordem} style={[styles.timelineRow, parada.isVoce && styles.timelineRowVoce]}>
                     <View style={styles.timelineMarkerColumn}>
                       <View
                         style={[
@@ -143,7 +154,7 @@ export default function Locations() {
                 ))}
               </View>
             )}
-          </View>
+          </GlowingCard>
         )}
       </View>
     </Screen>
@@ -176,12 +187,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl,
     paddingTop: theme.spacing.lg,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm + 2,
+    marginBottom: theme.spacing.md,
+  },
+  sectionIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(170,68,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(170,68,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sectionTitle: {
     color: theme.colors.white,
     fontWeight: theme.fontWeight.extraBold,
     fontSize: theme.fontSize.sm,
     letterSpacing: 2,
-    marginBottom: theme.spacing.md,
   },
   pointsCard: {
     backgroundColor: theme.colors.surfaceCard,
@@ -222,6 +248,12 @@ const styles = StyleSheet.create({
   },
   timelineRow: {
     flexDirection: 'row',
+    borderRadius: theme.radius.md,
+  },
+  timelineRowVoce: {
+    backgroundColor: 'rgba(170,68,255,0.1)',
+    marginHorizontal: -theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
   },
   timelineMarkerColumn: {
     alignItems: 'center',

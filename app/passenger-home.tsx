@@ -12,6 +12,7 @@ import { SideMenu } from '@/components/features/home/SideMenu';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { FloatingCircle, GLOW_COLORS } from '@/components/ui/FloatingCircle';
+import { GlowingCard } from '@/components/ui/GlowingCard';
 import { ModalSheet } from '@/components/ui/ModalSheet';
 import { TextField } from '@/components/ui/TextField';
 import { commonStrings } from '@/constants/strings';
@@ -28,7 +29,7 @@ import {
   showLocalNotification,
 } from '@/services/notifications/localNotifications';
 import { getRouteProgress } from '@/services/routeProgressService';
-import type { FaltaDTO, RotaProgressoDTO } from '@/types/api';
+import type { FaltaDTO, MotoristaPublicoDTO, RotaProgressoDTO } from '@/types/api';
 import type { AttendanceStatus } from '@/types';
 
 const ROUTE_PROGRESS_POLL_MS = 15000;
@@ -78,7 +79,7 @@ export default function PassengerHome() {
   // antes de poder abrir o chat ou carregar as faltas. Pega o primeiro
   // filho se houver mais de um — não existe seletor ainda pra esse caso.
   const [meuAluno, setMeuAluno] = useState<Passenger | null>(null);
-  const [driverAvatarUri, setDriverAvatarUri] = useState<string | null>(null);
+  const [driverInfo, setDriverInfo] = useState<MotoristaPublicoDTO | null>(null);
   // SessionUser não carrega avatarUri (login só devolve id/nome/email/tipo
   // — ver SessionContext.tsx), então busca o perfil completo à parte pra
   // exibir a foto de verdade em vez do ícone genérico sempre.
@@ -159,7 +160,7 @@ export default function PassengerHome() {
   // atribuído, o Avatar cai no ícone placeholder normalmente.
   useEffect(() => {
     if (!meuAluno?.motoristaId) {
-      setDriverAvatarUri(null);
+      setDriverInfo(null);
       return;
     }
     let isMounted = true;
@@ -167,10 +168,10 @@ export default function PassengerHome() {
       .then((motoristas) => {
         if (!isMounted) return;
         const meuMotorista = motoristas.find((m) => m.id === meuAluno.motoristaId);
-        setDriverAvatarUri(meuMotorista?.avatarBase64 ?? null);
+        setDriverInfo(meuMotorista ?? null);
       })
       .catch(() => {
-        if (isMounted) setDriverAvatarUri(null);
+        if (isMounted) setDriverInfo(null);
       });
     return () => {
       isMounted = false;
@@ -256,7 +257,12 @@ export default function PassengerHome() {
 
   const weekDays = Array.from({ length: 5 }, (_, index) => {
     const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + index);
-    return { day: date.getDate(), status: statusFor(date.getDate()) };
+    return {
+      day: date.getDate(),
+      status: statusFor(date.getDate()),
+      weekDayLabel: WEEK_DAY_LABELS[date.getDay()],
+      isToday: index === 0,
+    };
   });
 
   function handleLogout() {
@@ -306,11 +312,25 @@ export default function PassengerHome() {
           </Pressable>
         </LinearGradient>
 
-        <View style={styles.section}>
+        <GlowingCard style={styles.driverCardShadow} cardStyle={styles.driverCard}>
           <Text style={styles.sectionTitle}>SEU MOTORISTA</Text>
           <View style={styles.avatarGlow}>
-            <Avatar uri={driverAvatarUri} size={80} iconSize={48} />
+            <Avatar uri={driverInfo?.avatarBase64 ?? null} size={80} iconSize={48} />
           </View>
+
+          {driverInfo ? (
+            <View style={styles.driverInfoBlock}>
+              <Text style={styles.driverName} numberOfLines={1}>{driverInfo.nomeCompleto}</Text>
+              {driverInfo.modeloVan || driverInfo.placaVan ? (
+                <View style={styles.vehiclePill}>
+                  <MaterialIcons name="directions-bus" size={13} color={theme.colors.purpleLight} />
+                  <Text style={styles.vehiclePillText}>
+                    {[driverInfo.modeloVan, driverInfo.placaVan].filter(Boolean).join(' • ')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           <Animated.View style={[styles.statusCardShadow, statusGlowStyle]}>
             <View style={styles.statusCard}>
@@ -322,13 +342,24 @@ export default function PassengerHome() {
               <Text style={styles.statusText}>{routeStatusMessage(routeProgress)}</Text>
             </View>
           </Animated.View>
-        </View>
+        </GlowingCard>
 
         <View style={styles.section}>
-          <MaterialIcons name="schedule" size={28} color={theme.colors.textSecondary} style={styles.scheduleIcon} />
+          <View style={styles.monthIconBadge}>
+            <MaterialIcons name="event-available" size={22} color={theme.colors.purpleLight} />
+          </View>
           <Text style={styles.monthTitle}>{monthName}</Text>
           <View style={styles.calendarHeader}>
-            <Text style={styles.monthInfoText}>{absences} falta{absences === 1 ? '' : 's'} no mês</Text>
+            <View style={[styles.absencesBadge, absences === 0 ? styles.absencesBadgeOk : styles.absencesBadgeWarn]}>
+              <MaterialIcons
+                name={absences === 0 ? 'check-circle' : 'error-outline'}
+                size={14}
+                color={absences === 0 ? theme.colors.success : theme.colors.white}
+              />
+              <Text style={[styles.absencesBadgeText, absences === 0 && styles.absencesBadgeTextOk]}>
+                {absences} falta{absences === 1 ? '' : 's'} no mês
+              </Text>
+            </View>
             <Pressable
               style={styles.viewAllButton}
               onPress={() => setShowCalendar(true)}
@@ -339,13 +370,19 @@ export default function PassengerHome() {
           </View>
           <View style={styles.daysRow}>
             {weekDays.map((item) => (
-              <DayCircle
-                key={item.day}
-                day={item.day}
-                status={item.status}
-                enabled={isTodayOrFuture(item.day)}
-                onPress={() => handleDayPress(item.day)}
-              />
+              <View key={item.day} style={styles.dayColumn}>
+                <Text style={[styles.weekDayLabel, item.isToday && styles.weekDayLabelToday]}>
+                  {item.weekDayLabel}
+                </Text>
+                <View style={[styles.dayRing, item.isToday && styles.dayRingToday]}>
+                  <DayCircle
+                    day={item.day}
+                    status={item.status}
+                    enabled={isTodayOrFuture(item.day)}
+                    onPress={() => handleDayPress(item.day)}
+                  />
+                </View>
+              </View>
             ))}
           </View>
         </View>
@@ -388,14 +425,19 @@ export default function PassengerHome() {
       </ModalSheet>
 
       <View style={styles.bottomNav}>
-        <View style={styles.navItem}>
-          <MaterialIcons name="home" size={26} color={theme.colors.magenta} />
+        <View style={styles.navItem} accessibilityState={{ selected: true }}>
+          <View style={styles.navItemActiveBg}>
+            <MaterialIcons name="home" size={22} color={theme.colors.white} />
+          </View>
+          <Text style={[styles.navLabel, styles.navLabelActive]}>Início</Text>
         </View>
         <Pressable style={styles.navItem} onPress={handleFeatureInDevelopment} accessibilityRole="button" accessibilityLabel="Horários">
-          <MaterialIcons name="schedule" size={26} color={theme.colors.textFaint} />
+          <MaterialIcons name="schedule" size={22} color={theme.colors.textFaint} />
+          <Text style={styles.navLabel}>Horários</Text>
         </Pressable>
         <Pressable style={styles.navItem} onPress={() => router.push('/locations')} accessibilityRole="button" accessibilityLabel="Locais">
-          <MaterialIcons name="place" size={26} color={theme.colors.textFaint} />
+          <MaterialIcons name="place" size={22} color={theme.colors.textFaint} />
+          <Text style={styles.navLabel}>Locais</Text>
         </Pressable>
         <Pressable
           style={styles.navItem}
@@ -406,7 +448,8 @@ export default function PassengerHome() {
           }
           accessibilityRole="button"
           accessibilityLabel="Abrir chat com o motorista">
-          <MaterialIcons name="chat-bubble-outline" size={26} color={theme.colors.textFaint} />
+          <MaterialIcons name="chat-bubble-outline" size={22} color={theme.colors.textFaint} />
+          <Text style={styles.navLabel}>Chat</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -441,8 +484,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: theme.spacing.xxl,
-    borderBottomLeftRadius: theme.radius.xl,
-    borderBottomRightRadius: theme.radius.xl,
+    borderBottomLeftRadius: theme.radius.xxl,
+    borderBottomRightRadius: theme.radius.xxl,
+    shadowColor: theme.colors.magenta,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 10,
   },
   headerCenter: {
     alignItems: 'center',
@@ -463,6 +511,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(204,68,204,0.15)',
   },
+  driverCardShadow: {
+    marginHorizontal: theme.spacing.xl,
+    marginTop: theme.spacing.lg,
+  },
+  driverCard: {
+    padding: theme.spacing.xxl,
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceCard,
+    borderRadius: theme.radius.lg,
+  },
   sectionTitle: {
     color: theme.colors.white,
     fontWeight: theme.fontWeight.extraBold,
@@ -480,6 +538,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.sm + 2,
+  },
+  driverInfoBlock: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.lg,
+    gap: theme.spacing.xs + 2,
+    maxWidth: '100%',
+  },
+  driverName: {
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.base,
+  },
+  vehiclePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: 'rgba(170,68,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(170,68,255,0.3)',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.pill,
+  },
+  vehiclePillText: {
+    color: theme.colors.purpleLight,
+    fontWeight: theme.fontWeight.semibold,
+    fontSize: theme.fontSize.xs,
   },
   statusCardShadow: {
     width: '100%',
@@ -503,8 +588,16 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.base,
     flex: 1,
   },
-  scheduleIcon: {
-    alignSelf: 'center',
+  monthIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(170,68,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(170,68,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: theme.spacing.sm,
   },
   monthTitle: {
     color: theme.colors.white,
@@ -521,9 +614,29 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
   },
-  monthInfoText: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.fontSize.sm,
+  absencesBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs + 2,
+    borderRadius: theme.radius.pill,
+  },
+  absencesBadgeOk: {
+    backgroundColor: 'rgba(46,204,113,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(46,204,113,0.3)',
+  },
+  absencesBadgeWarn: {
+    backgroundColor: theme.colors.dangerStrong,
+  },
+  absencesBadgeText: {
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.xs,
+  },
+  absencesBadgeTextOk: {
+    color: theme.colors.success,
   },
   viewAllButton: {
     paddingHorizontal: theme.spacing.lg,
@@ -540,6 +653,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.md - 2,
   },
+  dayColumn: {
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  weekDayLabel: {
+    color: theme.colors.textMuted,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.xs,
+  },
+  weekDayLabelToday: {
+    color: theme.colors.purpleLight,
+  },
+  dayRing: {
+    padding: 3,
+    borderRadius: 29,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  dayRingToday: {
+    borderColor: theme.colors.purpleLight,
+  },
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: theme.colors.surfaceCard,
@@ -550,6 +684,24 @@ const styles = StyleSheet.create({
   navItem: {
     flex: 1,
     alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  navItemActiveBg: {
+    width: 40,
+    height: 32,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.magenta,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navLabel: {
+    color: theme.colors.textFaint,
+    fontWeight: theme.fontWeight.semibold,
+    fontSize: theme.fontSize.xs,
+  },
+  navLabelActive: {
+    color: theme.colors.magenta,
+    fontWeight: theme.fontWeight.bold,
   },
   modalTitle: {
     color: theme.colors.white,

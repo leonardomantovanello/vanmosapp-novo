@@ -12,7 +12,9 @@ export interface EmptyStateProps {
 export function EmptyState({ icon = 'info-outline', title, description }: EmptyStateProps) {
   return (
     <View style={styles.container}>
-      <MaterialIcons name={icon} size={32} color={theme.colors.textFaint} />
+      <View style={styles.iconBadge}>
+        <MaterialIcons name={icon} size={30} color={theme.colors.purpleLight} />
+      </View>
       <Text style={styles.title}>{title}</Text>
       {description ? <Text style={styles.description}>{description}</Text> : null}
     </View>
@@ -24,7 +26,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: theme.spacing.xxxl,
-    gap: theme.spacing.sm,
+    gap: theme.spacing.md,
+  },
+  iconBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(170,68,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(170,68,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: theme.colors.textSecondary,
