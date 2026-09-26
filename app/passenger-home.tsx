@@ -22,6 +22,7 @@ import { usePulse } from '@/hooks/use-pulse';
 import { listAlunos, type Passenger } from '@/services/alunosService';
 import { desmarcarFalta, listFaltas, marcarFalta } from '@/services/faltaService';
 import { listMotoristasPublico } from '@/services/motoristasService';
+import { addNotification } from '@/services/notificationService';
 import { getProfile } from '@/services/profileService';
 import {
   configureNotificationChannel,
@@ -113,6 +114,7 @@ export default function PassengerHome() {
           setRouteProgress(data);
           if (previousIsNextRef.current === false && data.vocEhOProximo) {
             showLocalNotification(DRIVER_APPROACHING_TITLE, DRIVER_APPROACHING_BODY);
+            if (session.user?.id) addNotification(session.user.id, DRIVER_APPROACHING_BODY);
           }
           previousIsNextRef.current = data.vocEhOProximo;
         })
@@ -431,10 +433,6 @@ export default function PassengerHome() {
           </View>
           <Text style={[styles.navLabel, styles.navLabelActive]}>Início</Text>
         </View>
-        <Pressable style={styles.navItem} onPress={handleFeatureInDevelopment} accessibilityRole="button" accessibilityLabel="Horários">
-          <MaterialIcons name="schedule" size={22} color={theme.colors.textFaint} />
-          <Text style={styles.navLabel}>Horários</Text>
-        </Pressable>
         <Pressable style={styles.navItem} onPress={() => router.push('/locations')} accessibilityRole="button" accessibilityLabel="Locais">
           <MaterialIcons name="place" size={22} color={theme.colors.textFaint} />
           <Text style={styles.navLabel}>Locais</Text>

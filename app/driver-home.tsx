@@ -17,6 +17,7 @@ import { usePulse } from '@/hooks/use-pulse';
 import { ApiError } from '@/services/api/client';
 import { listAlunos, type Passenger } from '@/services/alunosService';
 import { listFaltasHoje } from '@/services/faltaService';
+import { addNotification } from '@/services/notificationService';
 import { getProfile } from '@/services/profileService';
 import {
   configureNotificationChannel,
@@ -130,6 +131,7 @@ export default function DriverHome() {
               if (!knownAusentesRef.current.has(id)) {
                 const nome = passengers.find((p) => Number(p.id) === id)?.name ?? 'Um aluno';
                 showLocalNotification(FALTA_TITLE, faltaBody(nome));
+                if (session.user?.id) addNotification(session.user.id, faltaBody(nome));
               }
             }
           }

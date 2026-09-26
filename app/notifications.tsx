@@ -8,20 +8,28 @@ import { FloatingCircle, GLOW_COLORS } from '@/components/ui/FloatingCircle';
 import { Header } from '@/components/ui/Header';
 import { Screen } from '@/components/ui/Screen';
 import { theme } from '@/constants/theme';
-import { getNotifications } from '@/services/notificationService';
+import { useSession } from '@/context/SessionContext';
+import { getNotifications, markAllNotificationsRead } from '@/services/notificationService';
 import type { AppNotification } from '@/types';
 
 export default function Notifications() {
   const router = useRouter();
+  const session = useSession();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getNotifications().then((data) => {
+    const userId = session.user?.id;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    getNotifications(userId).then((data) => {
       setNotifications(data);
       setLoading(false);
+      markAllNotificationsRead(userId);
     });
-  }, []);
+  }, [session.user?.id]);
 
   return (
     <Screen
